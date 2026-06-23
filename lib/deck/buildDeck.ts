@@ -31,33 +31,41 @@ function addTitleSlide(pptx: pptxgen, spec: ReportSpec) {
   slide.addText("01", NUM("01"));
 }
 
-// Slide 2 — AI search visibility (dark)
+// Slide 2 — AI search visibility (light, matches DeckSlide.tsx)
 function addAiVisibilitySlide(pptx: pptxgen, spec: ReportSpec) {
-  const slide = pptx.addSlide({ masterName: "DARK" });
+  const slide = pptx.addSlide({ masterName: "LIGHT" });
   const ai = spec.aiVisibility;
   const yourSov = ai.sov.find((x) => x.brand === spec.clientName) || ai.sov.find((x) => /acme/i.test(x.brand)) || ai.sov[0];
   const sovPct = yourSov ? pct(yourSov.pct) : 14;
   const comp = ai.sov.find((x) => x.brand !== spec.clientName && !/acme/i.test(x.brand));
+  const delta = ai.delta;
 
-  slide.addText("YOUR VISIBILITY IN AI SEARCH", { x: 0.7, y: 0.7, w: 12, h: 0.4, fontSize: 13, bold: true, charSpacing: 1, color: "9a95c4", fontFace: f.body });
+  slide.addText("YOUR VISIBILITY IN AI SEARCH", { x: 0.7, y: 0.6, w: 8, h: 0.4, fontSize: 13, bold: true, charSpacing: 1, color: c.brand, fontFace: f.body });
+  slide.addImage({ data: pepperLogoBase64, x: 12.1, y: 0.69, w: 0.70, h: 0.22 });
+
+  // Purple-tinted score card (mirrors the React slide).
+  slide.addShape(pptx.ShapeType.roundRect, { x: 0.7, y: 1.7, w: 3.0, h: 2.0, fill: { color: "f5f3fe" }, line: { color: "f5f3fe" }, rectRadius: 0.12 });
   slide.addText([
-    { text: String(ai.score), options: { fontSize: 54, bold: true, color: c.white } },
-    { text: "/100", options: { fontSize: 22, color: "9a95c4" } },
-  ], { x: 0.7, y: 2.0, w: 4, h: 1, fontFace: f.heading });
-  slide.addText("AI visibility index", { x: 0.7, y: 3.0, w: 4, h: 0.3, fontSize: 12, color: "9a95c4", fontFace: f.body });
+    { text: String(ai.score), options: { fontSize: 50, bold: true, color: "4a43d6" } },
+    { text: "/100", options: { fontSize: 20, color: "9a92d8" } },
+  ], { x: 0.95, y: 2.0, w: 2.6, h: 0.9, fontFace: f.heading, valign: "middle" });
+  slide.addText([
+    { text: "AI visibility index", options: { color: c.textSecondary } },
+    ...(typeof delta === "number" ? [{ text: `  ${delta < 0 ? "▼" : "▲"} ${Math.abs(delta)}`, options: { bold: true, color: delta < 0 ? c.negative : c.positive } }] : []),
+  ], { x: 0.95, y: 3.0, w: 2.6, h: 0.3, fontSize: 12, fontFace: f.body });
 
-  const sentence = `When buyers ask ChatGPT, Perplexity and Gemini for product analytics tools, ${spec.clientName} appears ${sovPct}% of the time${comp ? ` vs ${comp.brand} at ${pct(comp.pct)}%` : ""}.`;
-  slide.addText(sentence, { x: 5.2, y: 2.0, w: 7.4, h: 1.4, fontSize: 16, color: "cfccf0", fontFace: f.body, lineSpacingMultiple: 1.3 });
+  const sentence = `When buyers ask ChatGPT, Perplexity and Gemini for recommendations, ${spec.clientName} appears ${sovPct}% of the time${comp ? ` vs ${comp.brand} at ${pct(comp.pct)}%` : ""}.`;
+  slide.addText(sentence, { x: 4.1, y: 1.8, w: 8.5, h: 1.4, fontSize: 16, color: "2c2940", fontFace: f.body, lineSpacingMultiple: 1.3, valign: "top" });
   if (ai.citationOpportunity) {
-    slide.addText(ai.citationOpportunity, { x: 5.2, y: 3.7, w: 7.4, h: 1.6, fontSize: 13, color: "9a95c4", fontFace: f.body, lineSpacingMultiple: 1.3 });
+    slide.addText(ai.citationOpportunity, { x: 4.1, y: 3.3, w: 8.5, h: 2.0, fontSize: 13, color: c.textSecondary, fontFace: f.body, lineSpacingMultiple: 1.3, valign: "top" });
   }
-  slide.addText("02", NUM("02", true));
+  slide.addText("02", NUM("02"));
 }
 
 // Slide 3 — Results this week (light)
 function addResultsSlide(pptx: pptxgen, spec: ReportSpec) {
   const slide = pptx.addSlide({ masterName: "LIGHT" });
-  slide.addText("RESULTS THIS WEEK", { x: 0.7, y: 0.6, w: 8, h: 0.4, fontSize: 13, bold: true, charSpacing: 1, color: c.brand, fontFace: f.body });
+  slide.addText("SEO RESULTS", { x: 0.7, y: 0.6, w: 8, h: 0.4, fontSize: 13, bold: true, charSpacing: 1, color: c.brand, fontFace: f.body });
   slide.addImage({ data: pepperLogoBase64, x: 12.1, y: 0.69, w: 0.70, h: 0.22 });
 
   spec.seo.metrics.slice(0, 3).forEach((m, i) => {
@@ -77,7 +85,7 @@ function addResultsSlide(pptx: pptxgen, spec: ReportSpec) {
 // Slide 4 — Next steps / recommendations (light)
 function addRecommendationsSlide(pptx: pptxgen, spec: ReportSpec) {
   const slide = pptx.addSlide({ masterName: "LIGHT" });
-  slide.addText("YOUR NEXT STEPS FOR NEXT WEEK", { x: 0.7, y: 0.6, w: 8, h: 0.4, fontSize: 13, bold: true, charSpacing: 1, color: c.brand, fontFace: f.body });
+  slide.addText("RECOMMENDATIONS", { x: 0.7, y: 0.6, w: 8, h: 0.4, fontSize: 13, bold: true, charSpacing: 1, color: c.brand, fontFace: f.body });
   slide.addImage({ data: pepperLogoBase64, x: 12.1, y: 0.69, w: 0.70, h: 0.22 });
 
   spec.recommendations.slice(0, 3).forEach((r, i) => {

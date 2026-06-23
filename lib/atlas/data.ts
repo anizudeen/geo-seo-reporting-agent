@@ -390,7 +390,7 @@ export const traceSources = [
 export const deckSlides = [
   { n: 1, label: "Title" },
   { n: 2, label: "AI-search visibility" },
-  { n: 3, label: "Organic results" },
+  { n: 3, label: "SEO results" },
   { n: 4, label: "Recommendations" },
   { n: 5, label: "What's next" },
 ];

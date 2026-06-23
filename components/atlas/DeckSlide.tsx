@@ -72,20 +72,23 @@ function SlideBody({ index, spec }: { index: number; spec: ReportSpec | null }) 
     );
   }
   if (index === 1) {
+    const delta = ai.delta;
     return (
-      <div style={{ ...shell, padding: "46px 50px", background: "linear-gradient(160deg,#221f3a,#191730)", color: "#eceaf7" }}>
-        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#9a95c4", marginBottom: 20 }}>Your visibility in AI search</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
-          <div style={{ textAlign: "center", flex: "none" }}>
-            <div style={{ fontSize: 54, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{ai.score}<span style={{ fontSize: 22, color: "#9a95c4" }}>/100</span></div>
-            <div style={{ fontSize: 12, color: "#9a95c4", marginTop: 5 }}>AI visibility index</div>
+      <div style={{ ...lightShell, justifyContent: "flex-start", paddingTop: 84 }}>
+        <div style={{ position: "absolute", top: 30, left: 50, right: 50, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#5b54f5" }}>Your visibility in AI search</span><PepperLogo />
+        </div>
+        <div style={{ display: "flex", alignItems: "stretch", gap: 26 }}>
+          <div style={{ flex: "none", width: 210, background: "#f5f3fe", borderRadius: 14, padding: "22px 24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <div style={{ fontSize: 52, fontWeight: 800, color: "#4a43d6", lineHeight: 1 }}>{ai.score}<span style={{ fontSize: 20, color: "#9a92d8" }}>/100</span></div>
+            <div style={{ fontSize: 12.5, color: "#6f6f7b", marginTop: 7 }}>AI visibility index{typeof delta === "number" ? <span style={{ color: delta < 0 ? "#d93b41" : "#0f9a5a", fontWeight: 800 }}> {delta < 0 ? "▼" : "▲"} {Math.abs(delta)}</span> : null}</div>
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16.5, lineHeight: 1.6, color: "#cfccf0" }}>When buyers ask ChatGPT, Perplexity and Gemini for product analytics tools, {client} appears <strong style={{ color: "#fff" }}>{sovPct}%</strong> of the time{topCompetitor ? <> vs {topCompetitor.brand} at <strong style={{ color: "#fff" }}>{pct(topCompetitor.pct)}%</strong></> : null}.</div>
-            {ai.citationOpportunity && <div style={{ fontSize: 13.5, lineHeight: 1.55, color: "#9a95c4", marginTop: 12 }}>{ai.citationOpportunity}</div>}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <div style={{ fontSize: 16, lineHeight: 1.55, color: "#2c2940" }}>When buyers ask ChatGPT, Perplexity and Gemini for recommendations, {client} appears <strong style={{ color: "#14121f" }}>{sovPct}%</strong> of the time{topCompetitor ? <> vs {topCompetitor.brand} at <strong style={{ color: "#14121f" }}>{pct(topCompetitor.pct)}%</strong></> : null}.</div>
+            {ai.citationOpportunity && <div style={{ fontSize: 13.5, lineHeight: 1.5, color: "#6f6f7b", marginTop: 12 }}>{ai.citationOpportunity}</div>}
           </div>
         </div>
-        <span style={num(true)}>02</span>
+        <span style={num()}>02</span>
       </div>
     );
   }
@@ -94,7 +97,7 @@ function SlideBody({ index, spec }: { index: number; spec: ReportSpec | null }) 
     return (
       <div style={{ ...lightShell, justifyContent: "flex-start", paddingTop: 84 }}>
         <div style={{ position: "absolute", top: 30, left: 50, right: 50, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#5b54f5" }}>Results this week</span><PepperLogo />
+          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#5b54f5" }}>SEO results</span><PepperLogo />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 18, marginBottom: 24 }}>
           {metrics.map((m) => {
@@ -116,7 +119,7 @@ function SlideBody({ index, spec }: { index: number; spec: ReportSpec | null }) 
     return (
       <div style={{ ...lightShell, justifyContent: "flex-start", paddingTop: 84 }}>
         <div style={{ position: "absolute", top: 30, left: 50, right: 50, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#5b54f5" }}>Your next steps for next week</span><PepperLogo />
+          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#5b54f5" }}>Recommendations</span><PepperLogo />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
           {spec.recommendations.slice(0, 3).map((r, i) => (
