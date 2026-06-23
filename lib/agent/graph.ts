@@ -1,0 +1,218 @@
+import { StateGraph, Annotation, messagesStateReducer } from "@langchain/langgraph";
+import { ToolNode } from "@langchain/langgraph/prebuilt";
+import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
+import { getModel } from "./model";
+import { agentTools, getGscData, getGa4Data, getSemrushData, getAiVisibilityData, getCmsData } from "./tools";
+import { ReportSpecSchema } from "./reportSpec";
+import type { ReportSpec } from "./reportSpec";
+
+// Progress event types pushed into the SSE stream
+export interface ProgressEvent {
+  type: "progress" | "human_in_loop" | "done" | "error";
+  agent?: string;
+  node?: string;
+  callLine?: string;  // "agent → call(args) ✓ result"
+  message?: string;
+  severity?: "info" | "warn" | "error";
+  question?: string;
+  hint?: string;
+  options?: { label: string; pitch: string }[];
+  reportSpec?: ReportSpec;
+}
+
+const replace = <T>(a: T, b: T | undefined): T => b !== undefined ? b : a;
+
+const StateAnnotation = Annotation.Root({
+  messages: Annotation<BaseMessage[]>({ reducer: messagesStateReducer, default: () => [] }),
+  collectedData: Annotation<Record<string, unknown>>({ reducer: replace, default: () => ({}) }),
+  reportSpec: Annotation<ReportSpec | null>({ reducer: replace, default: () => null }),
+  reviewerNotes: Annotation<string>({ reducer: replace, default: () => "" }),
+  progressEvents: Annotation<ProgressEvent[]>({ reducer: replace, default: () => [] }),
+  clientName: Annotation<string>({ reducer: replace, default: () => "Acme Analytics" }),
+  period: Annotation<string>({ reducer: replace, default: () => "May 25–31, 2026" }),
+  guidance: Annotation<string>({ reducer: replace, default: () => "" }),
+});
+
+type State = typeof StateAnnotation.State;
+
+const ANALYST_PROMPT = `You are the Analyst & Report Builder for Pepper Atlas, an AI-native platform for organic and AI search visibility.
+
+You have just received structured data from all 5 data sources (GSC, GA4, Semrush, AI Visibility, CMS). Your job is to:
+1. Interpret the data and write a professional, client-facing weekly performance report
+2. Structure it in EXACTLY 5 sections in this order: AI visibility FIRST, then SEO, conversions, content health, recommendations
+3. Fill the ReportSpec schema completely
+
+CRITICAL RULES:
+- AI visibility LEADS — it is the differentiator and fastest-growing discovery channel
+- NEVER invent or estimate numbers — every metric must come directly from the tool outputs provided
+- GA4 Dark Direct: explicitly note that ~31% of Direct traffic is likely AI-referred (stripped referrer). Surface this as an attribution caveat
+- SOV: always report as frequency-based share of voice, never single-answer position
+- Authority Score: mention as supporting context ONLY, never as a headline KPI
+- Low confidence: flag if totalPromptsTracked < 100
+- AI source platforms: AI engines increasingly cite Reddit (community) and YouTube (video). Factor the sourcePlatforms data into the AI-search read, and where it's the biggest lever, into a recommendation (e.g. engage the Reddit threads where the competitor wins the recommendation)
+- Recommendations: exactly 3, URL-grounded, prioritized by AI/organic impact
+- Tone: professional, concise, insight-forward — not a data dump
+- What's next: "Pepper handles it" = services Pepper can provide; "Your team handles it" = self-service checklist
+
+Client: {{clientName}}
+Period: {{period}}
+Additional guidance: {{guidance}}
+
+Collected data from tools:
+{{data}}
+
+Respond ONLY with the ReportSpec JSON — no prose around it.`;
+
+const REVIEWER_PROMPT = `You are the Quality Reviewer for Pepper Atlas reporting. Review this draft ReportSpec and check for:
+
+1. All 5 sections present (execSummary, seo, aiVisibility, recommendations, whatNext)
+2. AI visibility section leads (must have score, delta, sov, engineBreakdown)
+3. GA4 attribution caveat mentioned in seo.attributionNote
+4. SOV is described as frequency-based (not single-answer position)
+5. Domain Authority Score is NOT a headline metric
+6. Exactly 3 recommendations, each with label and brief
+7. No hallucinated numbers (spot-check: clicks should be ~48,200, AI score ~38)
+8. lowConfidence flag correctly set
+
+Respond with:
+- "APPROVED" if all checks pass
+- "REVISION NEEDED: [specific issue]" if something must be fixed
+
+Draft ReportSpec:
+{{spec}}`;
+
+async function collectorNode(state: State): Promise<Partial<State>> {
+  const events: ProgressEvent[] = [];
+  const collected: Record<string, unknown> = {};
+
+  const tools = [
+    { name: "GSC", fn: getGscData, label: "Fetching Google Search Console organic data" },
+    { name: "GA4", fn: getGa4Data, label: "Fetching GA4 sessions, conversions & attribution data" },
+    { name: "Semrush", fn: getSemrushData, label: "Fetching Semrush keyword rankings & competitive data" },
+    { name: "AI Visibility", fn: getAiVisibilityData, label: "Fetching AI search visibility, SoV & buyer prompts" },
+    { name: "CMS", fn: getCmsData, label: "Scanning CMS for stale pages & freshness signals" },
+  ];
+
+  // Fan-out: fetch all in parallel
+  await Promise.all(
+    tools.map(async (t) => {
+      events.push({ type: "progress", agent: "Agent 1 — Collector", node: t.name, message: t.label });
+      const result = await t.fn.invoke({});
+      const resultStr = typeof result === "string" ? result : JSON.stringify(result);
+      collected[t.name.toLowerCase().replace(/ /g, "_")] = result;
+      events.push({
+        type: "progress",
+        agent: "Agent 1 — Collector",
+        callLine: `collector → ${t.fn.name}() ✓ ${resultStr.slice(0, 80)}…`,
+      });
+    })
+  );
+
+  return {
+    collectedData: collected,
+    progressEvents: [...state.progressEvents, ...events],
+    messages: [...state.messages, new HumanMessage("Data collection complete.")],
+  };
+}
+
+async function analystNode(state: State): Promise<Partial<State>> {
+  const events: ProgressEvent[] = [
+    { type: "progress", agent: "Agent 2 — Analyst", message: "Interpreting data and drafting report narrative…" },
+  ];
+
+  const model = getModel(0);
+  const structuredModel = model.withStructuredOutput(ReportSpecSchema);
+
+  const prompt = ANALYST_PROMPT
+    .replace("{{clientName}}", state.clientName)
+    .replace("{{period}}", state.period)
+    .replace("{{guidance}}", state.guidance || "None")
+    .replace("{{data}}", JSON.stringify(state.collectedData, null, 2));
+
+  events.push({
+    type: "progress",
+    agent: "Agent 2 — Analyst",
+    callLine: "analyst → synthesize_report(gsc, ga4, semrush, ai_visibility, cms) ▶ drafting…",
+  });
+
+  const spec = await structuredModel.invoke([new HumanMessage(prompt)]);
+
+  events.push({
+    type: "progress",
+    agent: "Agent 2 — Analyst",
+    message: "Report draft complete. Passing to Reviewer…",
+    severity: "info",
+  });
+
+  return {
+    reportSpec: spec as ReportSpec,
+    progressEvents: [...state.progressEvents, ...events],
+    messages: [...state.messages, new AIMessage("Draft report generated.")],
+  };
+}
+
+async function reviewerNode(state: State): Promise<Partial<State>> {
+  const events: ProgressEvent[] = [
+    { type: "progress", agent: "Agent 3 — Reviewer", message: "Quality-checking report: sections, attribution, SOV…" },
+  ];
+
+  if (!state.reportSpec) {
+    return { progressEvents: [...state.progressEvents, ...events] };
+  }
+
+  const model = getModel(0);
+  const prompt = REVIEWER_PROMPT.replace("{{spec}}", JSON.stringify(state.reportSpec, null, 2));
+
+  const result = await model.invoke([new HumanMessage(prompt)]);
+  const reviewText = typeof result.content === "string" ? result.content : String(result.content);
+
+  if (reviewText.startsWith("APPROVED")) {
+    events.push({
+      type: "progress",
+      agent: "Agent 3 — Reviewer",
+      message: "✓ Report approved — all quality checks passed.",
+      severity: "info",
+    });
+  } else {
+    events.push({
+      type: "progress",
+      agent: "Agent 3 — Reviewer",
+      message: reviewText,
+      severity: "warn",
+    });
+    // Simulate human-in-the-loop for review decision
+    events.push({
+      type: "human_in_loop",
+      agent: "Agent 3 — Reviewer",
+      question: "The reviewer flagged an issue. How should we proceed?",
+      hint: reviewText.replace("REVISION NEEDED: ", ""),
+      options: [
+        { label: "Proceed anyway", pitch: "Accept the draft as-is and continue to deck creation" },
+        { label: "Auto-fix", pitch: "Let Agent 4 apply the fix automatically before creating the deck" },
+      ],
+    });
+  }
+
+  return {
+    reviewerNotes: reviewText,
+    progressEvents: [...state.progressEvents, ...events],
+    messages: [...state.messages, new AIMessage(`Review: ${reviewText}`)],
+  };
+}
+
+function buildGraph() {
+  const graph = new StateGraph(StateAnnotation)
+    .addNode("collector", collectorNode)
+    .addNode("analyst", analystNode)
+    .addNode("reviewer", reviewerNode)
+    .addEdge("__start__", "collector")
+    .addEdge("collector", "analyst")
+    .addEdge("analyst", "reviewer")
+    .addEdge("reviewer", "__end__");
+
+  return graph.compile();
+}
+
+export const reportGraph = buildGraph();
+
+export type { State };
