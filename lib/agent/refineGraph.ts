@@ -1,6 +1,6 @@
 import { StateGraph, Annotation, messagesStateReducer } from "@langchain/langgraph";
 import { HumanMessage, BaseMessage } from "@langchain/core/messages";
-import { getModel } from "./model";
+import { getModel, getDeepSeekModel, isQuotaError } from "./model";
 import { ReportSpecSchema } from "./reportSpec";
 import type { ReportSpec } from "./reportSpec";
 import type { ProgressEvent } from "./graph";
@@ -41,7 +41,21 @@ async function rewriterNode(state: RefineState): Promise<Partial<RefineState>> {
     .replace("{{instruction}}", state.instruction)
     .replace("{{spec}}", JSON.stringify(state.currentSpec, null, 2));
 
-  const refined = await structured.invoke([new HumanMessage(prompt)]);
+  let refined: ReportSpec;
+  try {
+    refined = await structured.invoke([new HumanMessage(prompt)]) as ReportSpec;
+  } catch (err) {
+    if (isQuotaError(err) && process.env.DEEPSEEK_API_KEY) {
+      events.push({ type: "progress", agent: "Agent 4 — Rewriter", message: "Gemini quota reached — switching to DeepSeek fallback…", severity: "warn" });
+      const result = await getDeepSeekModel(0).invoke([new HumanMessage(prompt + "\n\nReturn ONLY valid JSON matching the ReportSpec schema.")]);
+      const text = typeof result.content === "string" ? result.content : JSON.stringify(result.content);
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("DeepSeek did not return valid JSON");
+      refined = ReportSpecSchema.parse(JSON.parse(jsonMatch[0]));
+    } else {
+      throw err;
+    }
+  }
 
   events.push({
     type: "progress",
@@ -51,7 +65,7 @@ async function rewriterNode(state: RefineState): Promise<Partial<RefineState>> {
   });
 
   return {
-    refinedSpec: refined as ReportSpec,
+    refinedSpec: refined,
     progressEvents: [...state.progressEvents, ...events],
   };
 }

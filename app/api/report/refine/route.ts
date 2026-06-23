@@ -1,5 +1,6 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 import { NextRequest } from "next/server";
 import { refineGraph } from "@/lib/agent/refineGraph";
@@ -22,14 +23,19 @@ export async function POST(req: NextRequest) {
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const finalState = await refineGraph.invoke({ currentSpec, instruction } as any);
+        const streamIter = await refineGraph.stream({ currentSpec, instruction } as any, { streamMode: "values" });
 
-        for (const event of finalState.progressEvents as ProgressEvent[]) {
-          controller.enqueue(enc(event));
+        let lastState: Record<string, unknown> | null = null;
+        for await (const state of streamIter) {
+          lastState = state;
+          const newEvents = (state.progressEvents ?? []) as ProgressEvent[];
+          for (const event of newEvents) {
+            controller.enqueue(enc(event));
+          }
         }
 
         controller.enqueue(
-          enc({ type: "done", reportSpec: finalState.refinedSpec ?? undefined })
+          enc({ type: "done", reportSpec: (lastState?.refinedSpec ?? undefined) as ReportSpec | undefined })
         );
       } catch (err) {
         controller.enqueue(

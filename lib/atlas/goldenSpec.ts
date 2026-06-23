@@ -59,7 +59,7 @@ export const goldenReportSpec: ReportSpec = {
       { platform: "Perplexity", prompt: "Best product analytics software for a growing startup?", competitors: ["Quanta", "Amplitude"] },
     ],
     citationOpportunity: 'Reclaim the lost "best product analytics tools" citation on Perplexity with a structured comparison guide.',
-    lowConfidence: true,
+    lowConfidence: false,
   },
   recommendations: [
     { num: 1, label: "Reclaim the lost AI-search citation", brief: 'Publish a structured, comparison-ready guide for "best product analytics tools" so Perplexity and ChatGPT cite Acme again.' },

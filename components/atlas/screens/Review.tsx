@@ -5,7 +5,7 @@ import { Box } from "../ui";
 import { AiBlock } from "../AiBlock";
 import { SourceTag } from "../SourceTag";
 import {
-  recSummaries, execBlock, aiSearchBlock, recBlocks,
+  metricCards, recSummaries, execBlock, aiSearchBlock, recBlocks,
   keywordRows, pageRows, convCards, compBars, competitor,
 } from "@/lib/atlas/data";
 

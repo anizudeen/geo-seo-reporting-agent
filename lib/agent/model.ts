@@ -10,7 +10,7 @@ export function getModel(temperature = 0): BaseChatModel {
     case "openai":
       return new ChatOpenAI({ model: "gpt-4o-mini", temperature, apiKey: process.env.OPENAI_API_KEY });
     case "anthropic":
-      return new ChatAnthropic({ model: "claude-haiku-4-5-20251001", temperature, apiKey: process.env.ANTHROPIC_API_KEY });
+      return new ChatAnthropic({ model: "claude-haiku-4-5", temperature, apiKey: process.env.ANTHROPIC_API_KEY });
     case "google":
     default:
       return new ChatGoogleGenerativeAI({
@@ -31,7 +31,7 @@ export function getModel(temperature = 0): BaseChatModel {
 // Override model with DEEPSEEK_MODEL env var.
 export function getDeepSeekModel(temperature = 0): BaseChatModel {
   return new ChatOpenAI({
-    model: process.env.DEEPSEEK_MODEL ?? "deepseek-v4-flash",
+    model: process.env.DEEPSEEK_MODEL ?? "deepseek-chat",
     temperature,
     apiKey: process.env.DEEPSEEK_API_KEY,
     configuration: { baseURL: "https://api.deepseek.com" },

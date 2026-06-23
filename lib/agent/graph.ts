@@ -27,6 +27,8 @@ const StateAnnotation = Annotation.Root({
   collectedData: Annotation<Record<string, unknown>>({ reducer: replace, default: () => ({}) }),
   reportSpec: Annotation<ReportSpec | null>({ reducer: replace, default: () => null }),
   reviewerNotes: Annotation<string>({ reducer: replace, default: () => "" }),
+  needsRevision: Annotation<boolean>({ reducer: replace, default: () => false }),
+  revisionCount: Annotation<number>({ reducer: replace, default: () => 0 }),
   progressEvents: Annotation<ProgressEvent[]>({ reducer: replace, default: () => [] }),
   clientName: Annotation<string>({ reducer: replace, default: () => "Acme Analytics" }),
   period: Annotation<string>({ reducer: replace, default: () => "May 25–31, 2026" }),
@@ -51,6 +53,7 @@ CRITICAL RULES:
 - Low confidence: flag if totalPromptsTracked < 100
 - AI source platforms: AI engines increasingly cite Reddit (community) and YouTube (video). Factor the sourcePlatforms data into the AI-search read, and where it's the biggest lever, into a recommendation (e.g. engage the Reddit threads where the competitor wins the recommendation)
 - Recommendations: exactly 3, URL-grounded, prioritized by AI/organic impact
+- Keyword position change sign convention: the raw data uses negative = rank improved (position number went down, e.g. from 11 to 4 = change of -7). For the ReportSpec output, INVERT the sign: output POSITIVE numbers for improvements (e.g. change: +7 if rank went from 11→4), NEGATIVE for declines. This matches what the client deck will display.
 - Tone: professional, concise, insight-forward — not a data dump
 - What's next: "Pepper handles it" = services Pepper can provide; "Your team handles it" = self-service checklist
 
@@ -82,33 +85,47 @@ Draft ReportSpec:
 {{spec}}`;
 
 // Exact JSON template shown to DeepSeek (thinking model — structured output unsupported).
+// Uses concrete example values so the model produces real content, not literal "string" placeholders.
 const REPORT_SPEC_TEMPLATE = JSON.stringify({
-  clientName: "string",
-  period: "string",
-  execSummary: { text: "string", winOfWeek: "string", watch: "string" },
+  clientName: "<client name from input>",
+  period: "<week period e.g. May 25–31, 2026>",
+  execSummary: {
+    text: "<2-3 sentence executive summary of the week>",
+    winOfWeek: "<single biggest win this week>",
+    watch: "<one metric or trend to watch next week>",
+  },
   seo: {
-    metrics: [{ label: "string", value: "string", delta: "string" }],
-    keywordMovers: [{ kw: "string", pos: 0, change: 0, vol: 0 }],
-    topPages: [{ path: "string", clicks: 0, stale: false, note: "string" }],
-    competitorBenchmark: [{ label: "string", acme: "string", competitor: "string" }],
-    conversionNote: "string",
-    attributionNote: "string",
+    metrics: [
+      { label: "Organic clicks", value: "48,200", delta: "+12%" },
+      { label: "Impressions", value: "1.2M", delta: "+8%" },
+      { label: "Avg. position", value: "14.3", delta: "▲ 1.2" },
+    ],
+    keywordMovers: [{ kw: "<keyword>", pos: 4, change: 7, vol: 12000 }],
+    topPages: [{ path: "/blog/example", clicks: 3200, stale: false, note: "<insight about this page>" }],
+    competitorBenchmark: [{ label: "<metric name>", acme: "<acme value>", competitor: "<competitor value>" }],
+    conversionNote: "<attribution insight about conversions>",
+    attributionNote: "<GA4 dark direct / AI-referred traffic note>",
   },
   aiVisibility: {
-    score: 0, delta: 0,
-    sov: [{ brand: "string", pct: 0 }],
-    engineBreakdown: [{ name: "string", score: 0, change: 0 }],
-    mentions: [{ platform: "string", prompt: "string", competitors: ["string"] }],
-    citationOpportunity: "string",
+    score: 38,
+    delta: -4,
+    sov: [{ brand: "<brand name>", pct: 0.14 }],
+    engineBreakdown: [{ name: "ChatGPT", score: 16, change: -2 }],
+    mentions: [{ platform: "ChatGPT", prompt: "<prompt text>", competitors: ["<competitor>"] }],
+    citationOpportunity: "<specific action to improve AI citations>",
     lowConfidence: false,
   },
-  recommendations: [{ num: 1, label: "string", brief: "string" }],
+  recommendations: [
+    { num: 1, label: "<action title>", brief: "<1-2 sentence description with URL or specific action>" },
+    { num: 2, label: "<action title>", brief: "<1-2 sentence description>" },
+    { num: 3, label: "<action title>", brief: "<1-2 sentence description>" },
+  ],
   whatNext: {
-    pepperHandles: ["string"],
-    selfService: ["string"],
-    services: [{ title: "string", tagline: "string", desc: "string" }],
+    pepperHandles: ["<service Pepper provides>", "<another service>"],
+    selfService: ["<task for client team>", "<another task>"],
+    services: [{ title: "<service name>", tagline: "<short tagline>", desc: "<1 sentence description>" }],
   },
-  slides: [{ slideNum: 1, label: "string" }],
+  slides: [{ slideNum: 1, label: "<slide label>" }],
 }, null, 2);
 
 async function collectorNode(state: State): Promise<Partial<State>> {
@@ -153,11 +170,15 @@ async function analystNode(state: State): Promise<Partial<State>> {
   const model = getModel(0);
   const structuredModel = model.withStructuredOutput(ReportSpecSchema);
 
+  const revisionNote = state.reviewerNotes && !state.reviewerNotes.startsWith("APPROVED")
+    ? `\n\nPREVIOUS DRAFT WAS REJECTED. Reviewer feedback to address:\n${state.reviewerNotes.replace("REVISION NEEDED: ", "")}\n\nFix this issue in your new draft.`
+    : "";
+
   const prompt = ANALYST_PROMPT
     .replace("{{clientName}}", state.clientName)
     .replace("{{period}}", state.period)
     .replace("{{guidance}}", state.guidance || "None")
-    .replace("{{data}}", JSON.stringify(state.collectedData, null, 2));
+    .replace("{{data}}", JSON.stringify(state.collectedData, null, 2)) + revisionNote;
 
   events.push({
     type: "progress",
@@ -223,35 +244,36 @@ async function reviewerNode(state: State): Promise<Partial<State>> {
     }
   }
 
-  if (reviewText.startsWith("APPROVED")) {
+  const approved = reviewText.startsWith("APPROVED");
+  const MAX_REVISIONS = 2;
+
+  if (approved) {
     events.push({
       type: "progress",
       agent: "Agent 3 — Reviewer",
       message: "✓ Report approved — all quality checks passed.",
       severity: "info",
     });
+  } else if (state.revisionCount >= MAX_REVISIONS) {
+    events.push({
+      type: "progress",
+      agent: "Agent 3 — Reviewer",
+      message: `⚠ ${reviewText} — proceeding after ${MAX_REVISIONS} revision attempts.`,
+      severity: "warn",
+    });
   } else {
     events.push({
       type: "progress",
       agent: "Agent 3 — Reviewer",
-      message: reviewText,
+      message: `${reviewText} — auto-fixing (attempt ${state.revisionCount + 1}/${MAX_REVISIONS})…`,
       severity: "warn",
-    });
-    // Simulate human-in-the-loop for review decision
-    events.push({
-      type: "human_in_loop",
-      agent: "Agent 3 — Reviewer",
-      question: "The reviewer flagged an issue. How should we proceed?",
-      hint: reviewText.replace("REVISION NEEDED: ", ""),
-      options: [
-        { label: "Proceed anyway", pitch: "Accept the draft as-is and continue to deck creation" },
-        { label: "Auto-fix", pitch: "Let Agent 4 apply the fix automatically before creating the deck" },
-      ],
     });
   }
 
   return {
     reviewerNotes: reviewText,
+    needsRevision: !approved && state.revisionCount < MAX_REVISIONS,
+    revisionCount: approved ? state.revisionCount : state.revisionCount + 1,
     progressEvents: [...state.progressEvents, ...events],
     messages: [...state.messages, new AIMessage(`Review: ${reviewText}`)],
   };
@@ -265,7 +287,10 @@ function buildGraph() {
     .addEdge("__start__", "collector")
     .addEdge("collector", "analyst")
     .addEdge("analyst", "reviewer")
-    .addEdge("reviewer", "__end__");
+    .addConditionalEdges("reviewer", (state) => state.needsRevision ? "analyst" : "__end__", {
+      analyst: "analyst",
+      __end__: "__end__",
+    });
 
   return graph.compile();
 }
