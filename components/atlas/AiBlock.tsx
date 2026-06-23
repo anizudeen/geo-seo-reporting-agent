@@ -6,7 +6,7 @@ import { SourceTag } from "./SourceTag";
 import type { AiBlockData } from "@/lib/atlas/data";
 
 const btn = "display:inline-flex;align-items:center;gap:5px;background:#fff;color:#5b5775;border:1px solid #e6e3f2;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .14s,border-color .14s";
-const btnHover = "background:#f5f3fe;border-color:#d8d2f3";
+const btnHover = "background:#f5f3fe;border:1px solid #d8d2f3";
 const menuStyle: React.CSSProperties = { position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 30, display: "flex", flexDirection: "column", background: "#fff", border: "1px solid #e6e3f2", borderRadius: 10, padding: 5, boxShadow: "0 14px 34px rgba(20,18,31,.16)", width: 150 };
 const menuItem = "text-align:left;background:transparent;border:none;cursor:pointer;padding:8px 10px;font-size:12.5px;font-weight:600;color:#3a3654;border-radius:7px;font-family:inherit";
 
