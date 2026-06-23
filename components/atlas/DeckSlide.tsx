@@ -2,12 +2,21 @@
 
 /* eslint-disable @next/next/no-img-element */
 
+import { useEffect, useRef, useState } from "react";
 import type { ReportSpec } from "@/lib/agent/reportSpec";
+
+// A real 16:9 PowerPoint slide is 13.333" × 7.5" = 960pt × 540pt. We render every
+// slide on a fixed 960×540 "design canvas" (so px values map 1:1 to slide points)
+// and scale it to fit the container width. This makes the preview an accurate
+// mirror of the exported deck and stops long agent-generated copy from being
+// clipped by a too-short fixed box.
+const DESIGN_W = 960;
+const DESIGN_H = 540;
 
 const PepperLogo = ({ h = 17 }: { h?: number }) => <img src="/pepper-logo.svg" alt="Pepper" style={{ height: h, width: "auto", display: "block" }} />;
 
-const shell: React.CSSProperties = { position: "relative", aspectRatio: "16/9", borderRadius: 14, padding: "42px 50px", display: "flex", flexDirection: "column", justifyContent: "center", overflow: "hidden" };
-const lightShell: React.CSSProperties = { ...shell, background: "#fff", boxShadow: "0 12px 30px rgba(20,18,31,.13)" };
+const shell: React.CSSProperties = { position: "relative", width: "100%", height: "100%", padding: "42px 50px", display: "flex", flexDirection: "column", justifyContent: "center", overflow: "hidden", boxSizing: "border-box" };
+const lightShell: React.CSSProperties = { ...shell, background: "#fff" };
 const num = (dark?: boolean): React.CSSProperties => ({ position: "absolute", bottom: 20, right: 26, fontSize: 11, fontWeight: 700, color: dark ? "#6f6a92" : "#bdbdc7" });
 
 function pct(v: number) {
@@ -18,12 +27,28 @@ function firstSentences(text: string, n: number) {
   return parts.slice(0, n).join(" ");
 }
 
-export function DeckSlide({ index, spec }: { index: number; spec: ReportSpec | null }) {
+// Measure the container and scale the 960-wide canvas to fit its width.
+function useFitScale() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.5);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => setScale(el.clientWidth / DESIGN_W);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return { ref, scale };
+}
+
+function SlideBody({ index, spec }: { index: number; spec: ReportSpec | null }) {
   if (!spec) {
     return (
-      <div style={{ position: "relative", aspectRatio: "16/9", borderRadius: 14, padding: "42px 50px", display: "flex", flexDirection: "column", justifyContent: "center", overflow: "hidden", background: "#fff", boxShadow: "0 12px 30px rgba(20,18,31,.13)" }}>
+      <div style={{ ...lightShell, justifyContent: "center", alignItems: "center" }}>
         <div style={{ position: "absolute", top: 0, left: 0, width: 6, height: "100%", background: "#5b54f5" }} />
-        <div style={{ color: "#9a9aa6", fontSize: 14, textAlign: "center" }}>Awaiting report approval...</div>
+        <div style={{ color: "#9a9aa6", fontSize: 16, textAlign: "center" }}>Awaiting report approval...</div>
       </div>
     );
   }
@@ -48,7 +73,7 @@ export function DeckSlide({ index, spec }: { index: number; spec: ReportSpec | n
   }
   if (index === 1) {
     return (
-      <div style={{ ...shell, padding: "46px 50px", background: "linear-gradient(160deg,#221f3a,#191730)", boxShadow: "0 12px 30px rgba(25,23,48,.22)", color: "#eceaf7" }}>
+      <div style={{ ...shell, padding: "46px 50px", background: "linear-gradient(160deg,#221f3a,#191730)", color: "#eceaf7" }}>
         <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#9a95c4", marginBottom: 20 }}>Your visibility in AI search</div>
         <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
           <div style={{ textAlign: "center", flex: "none" }}>
@@ -67,7 +92,7 @@ export function DeckSlide({ index, spec }: { index: number; spec: ReportSpec | n
   if (index === 2) {
     const metrics = spec.seo.metrics.slice(0, 3);
     return (
-      <div style={{ ...lightShell, justifyContent: "flex-start", paddingTop: 80 }}>
+      <div style={{ ...lightShell, justifyContent: "flex-start", paddingTop: 84 }}>
         <div style={{ position: "absolute", top: 30, left: 50, right: 50, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#5b54f5" }}>Results this week</span><PepperLogo />
         </div>
@@ -89,15 +114,15 @@ export function DeckSlide({ index, spec }: { index: number; spec: ReportSpec | n
   }
   if (index === 3) {
     return (
-      <div style={{ ...lightShell, justifyContent: "flex-start", paddingTop: 80 }}>
+      <div style={{ ...lightShell, justifyContent: "flex-start", paddingTop: 84 }}>
         <div style={{ position: "absolute", top: 30, left: 50, right: 50, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#5b54f5" }}>Your next steps for next week</span><PepperLogo />
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
           {spec.recommendations.slice(0, 3).map((r, i) => (
             <div key={i} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
               <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#5b54f5", color: "#fff", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>{r.num ?? i + 1}</span>
-              <span style={{ fontSize: 14.5, lineHeight: 1.4, color: "#2c2940" }}><strong>{r.label}</strong> — {r.brief}</span>
+              <span style={{ fontSize: 14.5, lineHeight: 1.42, color: "#2c2940" }}><strong>{r.label}</strong> — {r.brief}</span>
             </div>
           ))}
         </div>
@@ -108,7 +133,7 @@ export function DeckSlide({ index, spec }: { index: number; spec: ReportSpec | n
   const pepper = spec.whatNext.pepperHandles.slice(0, 3);
   const self = spec.whatNext.selfService.slice(0, 3);
   return (
-    <div style={{ ...lightShell, justifyContent: "flex-start", paddingTop: 80 }}>
+    <div style={{ ...lightShell, justifyContent: "flex-start", paddingTop: 84 }}>
       <div style={{ position: "absolute", top: 0, left: 0, width: 6, height: "100%", background: "#5b54f5" }} />
       <div style={{ position: "absolute", top: 30, left: 50, right: 50, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#5b54f5" }}>What&apos;s next &amp; how we can help</span><PepperLogo h={18} />
@@ -133,6 +158,17 @@ export function DeckSlide({ index, spec }: { index: number; spec: ReportSpec | n
         </div>
       </div>
       <span style={num()}>05</span>
+    </div>
+  );
+}
+
+export function DeckSlide({ index, spec }: { index: number; spec: ReportSpec | null }) {
+  const { ref, scale } = useFitScale();
+  return (
+    <div ref={ref} style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", borderRadius: 14, overflow: "hidden", boxShadow: "0 12px 30px rgba(20,18,31,.13)" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, width: DESIGN_W, height: DESIGN_H, transform: `scale(${scale})`, transformOrigin: "top left" }}>
+        <SlideBody index={index} spec={spec} />
+      </div>
     </div>
   );
 }
