@@ -4,7 +4,6 @@ import { useAtlas } from "../store";
 import { Box } from "../ui";
 import { DeckSlide } from "../DeckSlide";
 import { exportDeck } from "@/lib/atlas/export";
-import { goldenReportSpec } from "@/lib/atlas/goldenSpec";
 
 export function ClientScreen() {
   const a = useAtlas();
@@ -21,7 +20,7 @@ export function ClientScreen() {
 
       <div style={{ maxWidth: 760, margin: "0 auto 16px", background: "#fff", border: "1px solid #e8e8ef", borderRadius: 12, padding: "13px 18px", display: "flex", alignItems: "center", gap: 13 }}>
         <div style={{ width: 48, height: 33, borderRadius: 6, background: "linear-gradient(160deg,#221f3a,#191730)", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 8px rgba(25,23,48,.22)" }}>
-          <span style={{ fontSize: 8, fontWeight: 800, color: "#fff" }}>38<span style={{ color: "#9a95c4" }}>/100</span></span>
+          <span style={{ fontSize: 8, fontWeight: 800, color: "#fff" }}>{a.reportSpec?.aiVisibility.score ?? "—"}<span style={{ color: "#9a95c4" }}>/100</span></span>
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13.5, fontWeight: 800, color: "#1d1b2e" }}>{title}.pptx</div>
@@ -33,7 +32,7 @@ export function ClientScreen() {
       </div>
 
       <div style={{ maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
-        {[0, 1, 2, 3, 4].map((i) => <DeckSlide key={i} index={i} spec={a.reportSpec ?? goldenReportSpec} />)}
+        {[0, 1, 2, 3, 4].map((i) => <DeckSlide key={i} index={i} spec={a.reportSpec} />)}
         <div style={{ textAlign: "center", fontSize: 12, color: "#86868f", padding: "6px 0 4px" }}>+ 7 more slides · full data appendix · prepared by Pepper</div>
       </div>
     </section>

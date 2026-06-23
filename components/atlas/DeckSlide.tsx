@@ -18,7 +18,15 @@ function firstSentences(text: string, n: number) {
   return parts.slice(0, n).join(" ");
 }
 
-export function DeckSlide({ index, spec }: { index: number; spec: ReportSpec }) {
+export function DeckSlide({ index, spec }: { index: number; spec: ReportSpec | null }) {
+  if (!spec) {
+    return (
+      <div style={{ position: "relative", aspectRatio: "16/9", borderRadius: 14, padding: "42px 50px", display: "flex", flexDirection: "column", justifyContent: "center", overflow: "hidden", background: "#fff", boxShadow: "0 12px 30px rgba(20,18,31,.13)" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, width: 6, height: "100%", background: "#5b54f5" }} />
+        <div style={{ color: "#9a9aa6", fontSize: 14, textAlign: "center" }}>Awaiting report approval...</div>
+      </div>
+    );
+  }
   const client = spec.clientName;
   const ai = spec.aiVisibility;
   const yourSov = ai.sov.find((s) => s.brand === client) || ai.sov.find((s) => /acme/i.test(s.brand)) || ai.sov[0];

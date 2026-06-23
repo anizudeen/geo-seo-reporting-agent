@@ -5,16 +5,23 @@ import { Box } from "../ui";
 import { AiBlock } from "../AiBlock";
 import { SourceTag } from "../SourceTag";
 import {
-  metricCards, recSummaries, execBlock, aiSearchBlock, recBlocks,
+  recSummaries, execBlock, aiSearchBlock, recBlocks,
   keywordRows, pageRows, convCards, compBars, competitor,
 } from "@/lib/atlas/data";
-import { goldenReportSpec } from "@/lib/atlas/goldenSpec";
 
 function ReviewMode() {
   const a = useAtlas();
   const spec = a.reportSpec;
-  const execText = spec ? spec.execSummary.text : execBlock.text;
-  const recs = spec ? spec.recommendations : recSummaries;
+  if (!spec) return <div style={{ padding: "26px 34px", textAlign: "center", color: "#86868f" }}>Awaiting agent to generate report...</div>;
+
+  const execText = spec.execSummary.text;
+  const recs = spec.recommendations;
+  const aiScore = spec.aiVisibility.score;
+  const yourSov = spec.aiVisibility.sov.find((s) => s.brand === a.selectedBrand) || spec.aiVisibility.sov[0];
+  const topCompetitor = spec.aiVisibility.sov.find((s) => s.brand !== a.selectedBrand);
+  const aiDelta = spec.aiVisibility.delta >= 0 ? "▲" : "▼";
+  const aiDeltaAbs = Math.abs(spec.aiVisibility.delta);
+
   return (
     <>
       <div style={{ marginBottom: 18 }}>
@@ -22,14 +29,17 @@ function ReviewMode() {
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, letterSpacing: "-.02em", color: "#1d1b2e" }}>{a.selectedBrand}</h1>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", background: "#fff", border: "1px solid #e8e8ef", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 2px rgba(20,18,31,.04)", marginBottom: 18 }}>
-        {metricCards.map((m) => (
-          <div key={m.label} style={{ padding: "15px 16px", borderLeft: "1px solid #f0f0f4", marginLeft: -1 }}>
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: "#86868f", marginBottom: 7 }}>{m.label}</div>
-            <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-.02em", color: "#14121f", lineHeight: 1 }}>{m.value}</div>
-            <span style={{ display: "inline-block", marginTop: 8, fontSize: 12, fontWeight: 800, color: m.deltaFg, background: m.deltaBg, padding: "2px 8px", borderRadius: 999 }}>{m.delta}</span>
-          </div>
-        ))}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", background: "#fff", border: "1px solid #e8e8ef", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 2px rgba(20,18,31,.04)", marginBottom: 18 }}>
+        {spec.seo.metrics.slice(0, 3).map((m) => {
+          const positive = m.delta.startsWith("+") || m.delta.startsWith("▲");
+          return (
+            <div key={m.label} style={{ padding: "15px 16px", borderLeft: "1px solid #f0f0f4", marginLeft: -1 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: "#86868f", marginBottom: 7 }}>{m.label}</div>
+              <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-.02em", color: "#14121f", lineHeight: 1 }}>{m.value}</div>
+              <span style={{ display: "inline-block", marginTop: 8, fontSize: 12, fontWeight: 800, color: positive ? "#0f9a5a" : "#d93b41", background: positive ? "#e6f6ee" : "#fdeaea", padding: "2px 8px", borderRadius: 999 }}>{m.delta}</span>
+            </div>
+          );
+        })}
       </div>
 
       <div style={{ background: "#faf9fc", border: "1px solid #e8e8ef", borderRadius: 14, padding: "16px 18px", marginBottom: 18 }}>
@@ -44,12 +54,12 @@ function ReviewMode() {
 
       <div style={{ display: "flex", alignItems: "center", gap: 18, background: "#1d1b2e", borderRadius: 14, padding: "16px 20px", marginBottom: 18 }}>
         <div style={{ flex: "none", textAlign: "center" }}>
-          <div style={{ fontSize: 30, fontWeight: 800, color: "#fff", lineHeight: 1 }}>38<span style={{ fontSize: 14, color: "#9a95c4" }}>/100</span></div>
+          <div style={{ fontSize: 30, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{aiScore}<span style={{ fontSize: 14, color: "#9a95c4" }}>/100</span></div>
           <div style={{ fontSize: 10, color: "#9a95c4", marginTop: 3 }}>AI visibility</div>
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>▼ 4 vs last week · Acme 14% share of voice</div>
-          <div style={{ fontSize: 12.5, color: "#9a95c4", marginTop: 3 }}>Quanta leads at 29% — largest gap vs competitor</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{aiDelta} {aiDeltaAbs} vs last week · {a.selectedBrand} {yourSov ? Math.round(yourSov.pct * 100) : 0}% share of voice</div>
+          <div style={{ fontSize: 12.5, color: "#9a95c4", marginTop: 3 }}>{topCompetitor ? `${topCompetitor.brand} leads at ${Math.round(topCompetitor.pct * 100)}% — largest gap vs competitor` : "No competitor data"}</div>
         </div>
         <span style={{ fontSize: 11, fontWeight: 800, color: "#ff9ea1", background: "rgba(217,59,65,.18)", padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap", flex: "none" }}>Needs attention</span>
       </div>
@@ -96,9 +106,11 @@ function SectionLabel({ n, title, badge }: { n: string; title: string; badge?: s
 
 function EditMode() {
   const a = useAtlas();
+  const spec = a.reportSpec;
+  if (!spec) return <div style={{ padding: "26px 34px", textAlign: "center", color: "#86868f" }}>No spec available</div>;
+
   const ss = a.showSources, sc = a.showConfidence;
   const focusLabel = a.focusChoice?.label || "AI-search visibility";
-  const spec = a.reportSpec;
   // When the live Gemini run produced a spec, use its real text; keep the static
   // tone/length variants so the inline editor still demonstrates Agent 4.
   const execLive = spec ? { ...execBlock, text: spec.execSummary.text } : execBlock;
@@ -108,9 +120,7 @@ function EditMode() {
   const recLive = spec
     ? recBlocks.map((rb, i) => (spec.recommendations[i] ? { ...rb, text: spec.recommendations[i].brief } : rb))
     : recBlocks;
-  // What's next mirrors the deck exactly (same spec data); no Pepper-upsell CTA on the
-  // internal draft — that's a client-facing action shown on the deck/client view instead.
-  const wn = (spec ?? goldenReportSpec).whatNext;
+  const wn = spec.whatNext;
   return (
     <>
       <div style={{ position: "sticky", top: 0, zIndex: 20, background: "rgba(246,246,249,.96)", backdropFilter: "blur(6px)", borderBottom: "1px solid #e8e8ef", padding: "10px 34px", margin: "0 -34px 20px" }}>
@@ -227,9 +237,9 @@ function EditMode() {
       <div id="edit-ai" style={{ margin: "30px 0 14px" }}>
         <SectionLabel n="03" title="AI-search visibility" />
         <div style={{ display: "flex", alignItems: "center", gap: 14, background: "#1d1b2e", borderRadius: 13, padding: "14px 18px", marginBottom: 13 }}>
-          <div style={{ flex: "none", textAlign: "center" }}><div style={{ fontSize: 26, fontWeight: 800, color: "#fff", lineHeight: 1 }}>38<span style={{ fontSize: 13, color: "#9a95c4" }}>/100</span></div><div style={{ fontSize: 10, color: "#9a95c4", marginTop: 2 }}>AI visibility</div></div>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: "#cfccf0" }}>▼ 4 vs last week · Acme 14% SoV · Quanta 29% ▲</div><div style={{ fontSize: 12, color: "#9a95c4", marginTop: 2 }}>Low-confidence signal — limited prompt sampling this cycle</div></div>
-          <SourceTag source="Semrush AI" confidence="Medium" figure="Semrush AI Visibility Index = 38 / 100 (prior wk: 42)" showSources={ss} showConfidence={sc} />
+          <div style={{ flex: "none", textAlign: "center" }}><div style={{ fontSize: 26, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{spec.aiVisibility.score}<span style={{ fontSize: 13, color: "#9a95c4" }}>/100</span></div><div style={{ fontSize: 10, color: "#9a95c4", marginTop: 2 }}>AI visibility</div></div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: "#cfccf0" }}>{spec.aiVisibility.delta >= 0 ? "▲" : "▼"} {Math.abs(spec.aiVisibility.delta)} vs last week</div><div style={{ fontSize: 12, color: "#9a95c4", marginTop: 2 }}>{spec.aiVisibility.citationOpportunity || "Signal available for interpretation"}</div></div>
+          <SourceTag source="Semrush AI" confidence="Medium" figure={`AI Visibility Index = ${spec.aiVisibility.score} / 100`} showSources={ss} showConfidence={sc} />
         </div>
         <AiBlock block={aiLive} showSources={ss} showConfidence={sc} onCommit={(t) => a.updateReportSpec((s) => { s.aiVisibility.citationOpportunity = t; })} />
       </div>

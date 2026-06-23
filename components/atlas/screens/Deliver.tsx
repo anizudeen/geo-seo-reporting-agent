@@ -5,7 +5,6 @@ import { Box } from "../ui";
 import { DeckSlide } from "../DeckSlide";
 import { deckSlides } from "@/lib/atlas/data";
 import { exportDeck } from "@/lib/atlas/export";
-import { goldenReportSpec } from "@/lib/atlas/goldenSpec";
 
 function deckTitleOf(brand: string, custom: string) {
   return custom.trim() || `${brand} — Weekly report`;
@@ -56,7 +55,7 @@ function DeckStep() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 4 }}>
           <div style={{ position: "relative" }}>
-            <DeckSlide index={a.currentSlide} spec={a.reportSpec ?? goldenReportSpec} />
+            <DeckSlide index={a.currentSlide} spec={a.reportSpec} />
             {a.currentSlide > 0 && (
               <Box as="button" s="position:absolute;left:-16px;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;background:#fff;border:1px solid #e8e8ef;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:10;box-shadow:0 2px 8px rgba(20,18,31,.1)" h="background:#f5f5f8" onClick={a.prevSlide}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1d1b2e" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
