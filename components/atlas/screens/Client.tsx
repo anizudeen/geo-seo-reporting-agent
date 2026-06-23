@@ -26,7 +26,7 @@ export function ClientScreen() {
           <div style={{ fontSize: 13.5, fontWeight: 800, color: "#1d1b2e" }}>{title}.pptx</div>
           <div style={{ fontSize: 12, color: "#6f6f7b", marginTop: 1 }}>PowerPoint · 12 slides · prepared by Pepper</div>
         </div>
-        <Box as="button" s="display:inline-flex;align-items:center;gap:7px;background:#fff;color:#5b5775;border:1px solid #e6e3f2;border-radius:9px;padding:8px 13px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit" h="background:#f5f3fe;border-color:#d8d2f3" onClick={() => exportDeck(a.selectedBrand, a.reportSpec).catch(console.error)}>
+        <Box as="button" s="display:inline-flex;align-items:center;gap:7px;background:#fff;color:#5b5775;border:1px solid #e6e3f2;border-radius:9px;padding:8px 13px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit" h="background:#f5f3fe;border:1px solid #d8d2f3" onClick={() => exportDeck(a.selectedBrand, a.reportSpec).catch(console.error)}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12M7 11l5 4 5-4M5 20h14" /></svg>Download
         </Box>
       </div>

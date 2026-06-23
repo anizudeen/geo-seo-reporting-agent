@@ -243,7 +243,7 @@ export function AtlasProvider({ children }: { children: React.ReactNode }) {
   const startRun = useCallback(() => {
     clearTimers();
     const intr = runEvents.find((e) => e.type === "interrupt");
-    set({ runStarted: true, running: true, runDone: false, awaitingInput: true, focusChoice: null, awaitingCustom: false, customFocusText: "", feed: [], reviewerFindings: [], srcDone: {}, activeAgent: "insight", reportSpec: null, usedLiveAI: false, runStartedAt: Date.now() });
+    set({ runStarted: true, running: true, runDone: false, awaitingInput: true, focusChoice: null, awaitingCustom: false, customFocusText: "", feed: [], reviewerFindings: [], srcDone: {}, activeAgent: null, reportSpec: null, usedLiveAI: false, runStartedAt: Date.now() });
     if (intr) appendFeed({ ...intr, agent: "insight" });
   }, [clearTimers, set, appendFeed]);
 

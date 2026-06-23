@@ -67,7 +67,7 @@ function DeckStep() {
               </Box>
             )}
           </div>
-          <div style={{ textAlign: "center", fontSize: 12, fontWeight: 700, color: "#86868f" }}>{a.currentSlide + 1} of 5 · 5 of 12 slides shown</div>
+          <div style={{ textAlign: "center", fontSize: 12, fontWeight: 700, color: "#86868f" }}>{a.currentSlide + 1} of 5</div>
           <div style={{ display: "flex", gap: 10, overflowX: "auto", padding: "2px 2px 6px" }}>
             {deckSlides.map((t, i) => {
               const active = i === a.currentSlide;

@@ -67,7 +67,7 @@ export function DeckSlide({ index, spec }: { index: number; spec: ReportSpec | n
   if (index === 2) {
     const metrics = spec.seo.metrics.slice(0, 3);
     return (
-      <div style={lightShell}>
+      <div style={{ ...lightShell, justifyContent: "flex-start", paddingTop: 80 }}>
         <div style={{ position: "absolute", top: 30, left: 50, right: 50, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#5b54f5" }}>Results this week</span><PepperLogo />
         </div>
@@ -89,7 +89,7 @@ export function DeckSlide({ index, spec }: { index: number; spec: ReportSpec | n
   }
   if (index === 3) {
     return (
-      <div style={lightShell}>
+      <div style={{ ...lightShell, justifyContent: "flex-start", paddingTop: 80 }}>
         <div style={{ position: "absolute", top: 30, left: 50, right: 50, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#5b54f5" }}>Your next steps for next week</span><PepperLogo />
         </div>
@@ -108,7 +108,7 @@ export function DeckSlide({ index, spec }: { index: number; spec: ReportSpec | n
   const pepper = spec.whatNext.pepperHandles.slice(0, 3);
   const self = spec.whatNext.selfService.slice(0, 3);
   return (
-    <div style={lightShell}>
+    <div style={{ ...lightShell, justifyContent: "flex-start", paddingTop: 80 }}>
       <div style={{ position: "absolute", top: 0, left: 0, width: 6, height: "100%", background: "#5b54f5" }} />
       <div style={{ position: "absolute", top: 30, left: 50, right: 50, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#5b54f5" }}>What&apos;s next &amp; how we can help</span><PepperLogo h={18} />

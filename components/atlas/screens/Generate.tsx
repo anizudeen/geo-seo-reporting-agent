@@ -86,7 +86,7 @@ function FeedRow({ f }: { f: FeedItem }) {
               <>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {(f.options || []).map((o) => (
-                    <Box as="button" key={o.key} s="display:flex;align-items:center;gap:11px;text-align:left;background:#fff;border:1px solid #e8e8ef;border-radius:10px;padding:11px 13px;cursor:pointer;font-family:inherit;width:100%" h="border-color:#5b54f5;background:#faf9ff" onClick={() => a.chooseFocus(o)}>
+                    <Box as="button" key={o.key} s="display:flex;align-items:center;gap:11px;text-align:left;background:#fff;border:1px solid #e8e8ef;border-radius:10px;padding:11px 13px;cursor:pointer;font-family:inherit;width:100%" h="border:1px solid #5b54f5;background:#faf9ff" onClick={() => a.chooseFocus(o)}>
                       <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#5b54f5", flex: "none" }} />
                       <span style={{ flex: 1 }}>
                         <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1d1b2e" }}>{o.label}</span>

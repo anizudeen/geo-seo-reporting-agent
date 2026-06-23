@@ -71,7 +71,7 @@ export function BrandsScreen() {
           );
         })}
 
-        <Box as="button" s="background:transparent;border:1.5px dashed #d3d3da;border-radius:16px;padding:18px;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:172px;color:#86868f" h="border-color:#5b54f5;color:#5b54f5;background:#faf9ff" onClick={a.openAddBrand}>
+        <Box as="button" s="background:transparent;border:1.5px dashed #d3d3da;border-radius:16px;padding:18px;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:172px;color:#86868f" h="border:1.5px dashed #5b54f5;color:#5b54f5;background:#faf9ff" onClick={a.openAddBrand}>
           <span style={{ width: 42, height: 42, borderRadius: "50%", background: "#f0f0f4", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
           </span>

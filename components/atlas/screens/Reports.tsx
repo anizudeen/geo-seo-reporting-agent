@@ -61,7 +61,7 @@ export function ReportsScreen() {
               </div>
               <span style={{ fontSize: 13, color: "#5f5f6b", fontWeight: 600 }}>{r.sharedOn}</span>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-                <Box as="button" s="display:inline-flex;align-items:center;gap:6px;background:#fff;color:#5b5775;border:1px solid #e6e3f2;border-radius:8px;padding:7px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap" h="background:#f5f3fe;border-color:#d8d2f3" onClick={() => { exportDeck(r.brand, a.reportSpec).catch(console.error); a.downloadReport(r.id); }} title="Download .pptx">
+                <Box as="button" s="display:inline-flex;align-items:center;gap:6px;background:#fff;color:#5b5775;border:1px solid #e6e3f2;border-radius:8px;padding:7px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap" h="background:#f5f3fe;border:1px solid #d8d2f3" onClick={() => { exportDeck(r.brand, a.reportSpec).catch(console.error); a.downloadReport(r.id); }} title="Download .pptx">
                   {downloaded ? (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#0f8a52" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0f9a5a" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l4 4 10-10" /></svg>Saved</span>
                   ) : (
