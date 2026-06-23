@@ -1,13 +1,14 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 import { NextRequest } from "next/server";
 import { reportGraph } from "@/lib/agent/graph";
 import { awaitAllCallbacks } from "@langchain/core/callbacks/promises";
 import type { ProgressEvent } from "@/lib/agent/graph";
 
-function sseData(event: ProgressEvent) {
-  return `data: ${JSON.stringify(event)}\n\n`;
+function sse(event: ProgressEvent) {
+  return new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`);
 }
 
 export async function POST(req: NextRequest) {
@@ -18,28 +19,26 @@ export async function POST(req: NextRequest) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      const enc = (event: ProgressEvent) => new TextEncoder().encode(sseData(event));
-
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const finalState = await reportGraph.invoke(
+        // Stream the graph node-by-node (real-time) rather than invoking the whole
+        // graph and dumping events at the end. streamMode "values" yields the full
+        // accumulated state after each super-step; we flush only the newly-added
+        // progress events so the client sees each agent's work as it happens.
+        let emitted = 0;
+        let finalSpec: ProgressEvent["reportSpec"];
+        const iter = await reportGraph.stream(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           { clientName, period, guidance } as any,
-          { recursionLimit: 10 }
+          { recursionLimit: 10, streamMode: "values" }
         );
-
-        // Stream all accumulated progress events
-        for (const event of finalState.progressEvents as ProgressEvent[]) {
-          controller.enqueue(enc(event));
+        for await (const state of iter as AsyncIterable<{ progressEvents?: ProgressEvent[]; reportSpec?: ProgressEvent["reportSpec"] }>) {
+          const evs = state.progressEvents ?? [];
+          for (; emitted < evs.length; emitted++) controller.enqueue(sse(evs[emitted]));
+          if (state.reportSpec) finalSpec = state.reportSpec;
         }
-
-        // Emit the final done event with reportSpec
-        controller.enqueue(
-          enc({ type: "done", reportSpec: finalState.reportSpec ?? undefined })
-        );
+        controller.enqueue(sse({ type: "done", reportSpec: finalSpec ?? undefined }));
       } catch (err) {
-        controller.enqueue(
-          enc({ type: "error", message: err instanceof Error ? err.message : String(err) })
-        );
+        controller.enqueue(sse({ type: "error", message: err instanceof Error ? err.message : String(err) }));
       } finally {
         await awaitAllCallbacks();
         controller.close();

@@ -8,8 +8,28 @@ import {
 import type { ReportSpec } from "@/lib/agent/reportSpec";
 import { goldenReportSpec } from "@/lib/atlas/goldenSpec";
 
-/** Consume the /api/report SSE stream → real Gemini-generated ReportSpec. Throws if no key / error. */
-async function fetchRealReport(payload: { clientName: string; period: string; guidance: string }): Promise<ReportSpec | null> {
+/** Backend ProgressEvent → run-feed item. Collector is suppressed (shown in the scripted
+ *  intro already); analyst/reviewer steps stream live into the feed. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapBackendEvent(e: any): RunEvent | null {
+  const a: string = e.agent || "";
+  if (e.type === "human_in_loop") return null;
+  if (/Collector/i.test(a)) return null;
+  const agentId = /Analyst|Insight/i.test(a) ? "insight" : /Reviewer|Fact/i.test(a) ? "fact" : "orch";
+  if (e.callLine) return { agent: agentId, type: "result", text: e.callLine };
+  if (e.severity === "warn") return { agent: agentId, type: "finding", sev: "warn", text: e.message };
+  if (e.severity === "info") return { agent: agentId, type: "finding", sev: "pass", text: e.message };
+  if (e.message) return { agent: agentId, type: "msg", text: e.message };
+  return null;
+}
+
+/** Consume the /api/report SSE stream → real Gemini-generated ReportSpec, calling onEvent
+ *  for each progress event as it streams. Throws if no key / error. */
+async function fetchRealReport(
+  payload: { clientName: string; period: string; guidance: string },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onEvent?: (e: any) => void
+): Promise<ReportSpec | null> {
   const res = await fetch("/api/report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
   if (!res.ok || !res.body) throw new Error(`report failed ${res.status}`);
   const reader = res.body.getReader();
@@ -28,6 +48,7 @@ async function fetchRealReport(payload: { clientName: string; period: string; gu
       const obj = JSON.parse(line.slice(5).trim());
       if (obj.type === "done") spec = obj.reportSpec ?? null;
       else if (obj.type === "error") throw new Error(obj.message || "agent error");
+      else onEvent?.(obj);
     }
   }
   return spec;
@@ -266,23 +287,28 @@ export function AtlasProvider({ children }: { children: React.ReactNode }) {
     appendFeed({ agent: "orch", type: "resume", text: resumeText });
     const s = stateRef.current;
     const guidance = `Report focus: ${opt.label} — ${opt.pitch}. ${s.agentInstr.insight || ""}`.trim();
-    appendFeed({ agent: "insight", type: "msg", text: "Insights Writer is calling Gemini to draft the report from the locked data…" });
+    appendFeed({ agent: "insight", type: "msg", text: "Insights Writer is drafting the report with Gemini…" });
     set({ activeAgent: "insight" });
     scrollFeed();
     try {
-      const spec = await fetchRealReport({ clientName: s.selectedBrand, period: "May 25–31, 2026", guidance });
-      if (spec) {
-        const evs = events.current;
-        const streams = evs.filter((e) => e.type === "stream");
-        if (streams[0]) streams[0].text = spec.execSummary.text;
-        if (streams[1]) streams[1].text = `Drafting prioritized recommendations: ${spec.recommendations.map((r) => r.label).join("; ")}.`;
-        set({ reportSpec: spec, usedLiveAI: true });
-      }
+      // Stream the real agents (analyst → reviewer) live into the feed as they execute.
+      const spec = await fetchRealReport(
+        { clientName: s.selectedBrand, period: "May 25–31, 2026", guidance },
+        (e) => { const item = mapBackendEvent(e); if (item) { set({ activeAgent: item.agent }); appendFeed(item); } }
+      );
+      if (!spec) throw new Error("no spec");
+      set({ reportSpec: spec, usedLiveAI: true, activeAgent: "insight" });
+      // Stream the real executive summary as the drafted narrative.
+      appendFeed({ agent: "insight", type: "stream", text: "" });
+      typeStream(spec.execSummary.text, () => {
+        appendFeed({ agent: "orch", type: "complete", text: "Run complete — draft and review ready for your approval." });
+        finishRun();
+      });
     } catch {
-      // no key / error → keep the scripted narrative and golden spec
+      // no key / error → fall back to the scripted narrative + golden spec
+      later(() => playNext(), 400);
     }
-    later(() => playNext(), 400);
-  }, [set, appendFeed, scrollFeed, later, playNext]);
+  }, [set, appendFeed, scrollFeed, typeStream, finishRun, later, playNext]);
 
   const chooseFocus = useCallback((opt: { key: string; label: string; pitch: string; isOther?: boolean }) => {
     if (!stateRef.current.awaitingInput) return;

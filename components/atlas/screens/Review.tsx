@@ -7,14 +7,8 @@ import { SourceTag } from "../SourceTag";
 import {
   metricCards, recSummaries, execBlock, aiSearchBlock, recBlocks,
   keywordRows, pageRows, convCards, compBars, competitor,
-  pepperServices, clientItems, whatNextIntro,
 } from "@/lib/atlas/data";
-
-const svcAccent = [
-  { bg: "#f5f3fe", fg: "#5b54f5" },
-  { bg: "#eef6f0", fg: "#0f8a52" },
-  { bg: "#fdf6ea", fg: "#b5781f" },
-];
+import { goldenReportSpec } from "@/lib/atlas/goldenSpec";
 
 function ReviewMode() {
   const a = useAtlas();
@@ -114,6 +108,9 @@ function EditMode() {
   const recLive = spec
     ? recBlocks.map((rb, i) => (spec.recommendations[i] ? { ...rb, text: spec.recommendations[i].brief } : rb))
     : recBlocks;
+  // What's next mirrors the deck exactly (same spec data); no Pepper-upsell CTA on the
+  // internal draft — that's a client-facing action shown on the deck/client view instead.
+  const wn = (spec ?? goldenReportSpec).whatNext;
   return (
     <>
       <div style={{ position: "sticky", top: 0, zIndex: 20, background: "rgba(246,246,249,.96)", backdropFilter: "blur(6px)", borderBottom: "1px solid #e8e8ef", padding: "10px 34px", margin: "0 -34px 20px" }}>
@@ -246,33 +243,22 @@ function EditMode() {
 
       <div style={{ margin: "32px 0 16px" }}>
         <SectionLabel n="05" title="What's next & how we can help" />
-        <div style={{ background: "#fff", border: "1px solid #e8e8ef", borderRadius: 16, overflow: "hidden" }}>
-          <div style={{ padding: "20px 24px", borderBottom: "1px solid #f0f0f4" }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#3a3654", lineHeight: 1.6 }}>{whatNextIntro}</div>
-          </div>
-          <div style={{ padding: "20px 24px", borderBottom: "1px solid #f0f0f4" }}>
-            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase", color: "#92929d", marginBottom: 14 }}>Pepper handles it — our services</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 13, marginBottom: 16 }}>
-              {pepperServices.map((svc, i) => (
-                <div key={svc.title} style={{ background: svcAccent[i].bg, borderRadius: 13, padding: "16px 17px" }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 800, color: "#1d1b2e", marginBottom: 3 }}>{svc.title}</div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: svcAccent[i].fg, marginBottom: 9 }}>{svc.tagline}</div>
-                  <div style={{ fontSize: 12.5, lineHeight: 1.5, color: "#5c5c68" }}>{svc.desc}</div>
-                </div>
+        {/* Mirrors the deck's What's next slide exactly. No Pepper-upsell CTA here — this is
+            the CS's internal draft; the client-facing "Let's talk scope" lives on the deck. */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 13 }}>
+          <div style={{ background: "#f5f3fe", border: "1px solid #e3ddfb", borderRadius: 14, padding: "18px 20px" }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#4a43d6", marginBottom: 12 }}>Pepper handles it</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {wn.pepperHandles.map((s, i) => (
+                <div key={i} style={{ fontSize: 13, lineHeight: 1.45, color: "#3a3654", display: "flex", alignItems: "flex-start", gap: 8 }}><span style={{ color: "#5b54f5", fontWeight: 800, flex: "none" }}>✓</span>{s}</div>
               ))}
             </div>
-            <Box as="button" s="display:inline-flex;align-items:center;gap:8px;background:#5b54f5;color:#fff;border:none;border-radius:10px;padding:11px 18px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit" h="background:#4a43d6">
-              Book a scope conversation with Pepper
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
-            </Box>
           </div>
-          <div style={{ padding: "18px 24px" }}>
-            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase", color: "#92929d", marginBottom: 12 }}>Your team handles it — self-service checklist</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-              {clientItems.map((item) => (
-                <div key={item} style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13, lineHeight: 1.45, color: "#5c5c68" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9a9aa6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none", marginTop: 1 }}><rect x="3" y="3" width="18" height="18" rx="2" /></svg>{item}
-                </div>
+          <div style={{ background: "#faf9fc", border: "1px solid #f0f0f4", borderRadius: 14, padding: "18px 20px" }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#5c5c68", marginBottom: 12 }}>Your team handles it</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {wn.selfService.map((s, i) => (
+                <div key={i} style={{ fontSize: 13, lineHeight: 1.45, color: "#5c5c68", display: "flex", alignItems: "flex-start", gap: 8 }}><span style={{ color: "#9a9aa6", flex: "none" }}>□</span>{s}</div>
               ))}
             </div>
           </div>
