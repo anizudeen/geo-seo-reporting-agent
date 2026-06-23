@@ -18,7 +18,7 @@ function ReviewMode() {
   return (
     <>
       <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#5b54f5", marginBottom: 5 }}>Weekly report · Draft{a.usedLiveAI ? " · Gemini-generated" : ""}</div>
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#5b54f5", marginBottom: 5 }}>Weekly report · Draft</div>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, letterSpacing: "-.02em", color: "#1d1b2e" }}>{a.selectedBrand}</h1>
       </div>
 

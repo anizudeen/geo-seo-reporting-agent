@@ -229,7 +229,6 @@ function RunConsole() {
             {a.runDone && <><span style={{ color: "#0f8a52", fontWeight: 700 }}>✓ Run complete</span> — draft &amp; review ready</>}
           </p>
         </div>
-        <Box as="button" s="background:#fff;color:#5b5775;border:1px solid #e2def0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit" h="background:#f5f5f8" onClick={a.skipGen}>Skip to review</Box>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "230px 1fr", gap: 16, alignItems: "start" }}>

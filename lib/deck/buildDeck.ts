@@ -1,6 +1,14 @@
+import fs from "fs";
+import path from "path";
 import pptxgen from "pptxgenjs";
 import type { ReportSpec } from "../agent/reportSpec";
 import { theme } from "./theme";
+
+const pepperLogoBase64 = (() => {
+  const svgPath = path.join(process.cwd(), "public", "pepper-logo.svg");
+  const svg = fs.readFileSync(svgPath, "utf-8");
+  return "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64");
+})();
 
 const { colors: c, fonts: f, slide: s } = theme;
 
@@ -17,7 +25,7 @@ const NUM = (n: string, dark?: boolean) => ({ x: 12.2, y: 6.9, w: 0.8, h: 0.3, f
 function addTitleSlide(pptx: pptxgen, spec: ReportSpec) {
   const slide = pptx.addSlide({ masterName: "LIGHT" });
   slide.addText(spec.clientName, { x: 0.7, y: 0.5, w: 8, h: 0.4, fontSize: 15, bold: true, color: c.text, fontFace: f.heading });
-  slide.addText("Pepper", { x: 10.5, y: 0.5, w: 2.3, h: 0.4, fontSize: 15, bold: true, align: "right", color: c.aiDark, fontFace: f.heading });
+  slide.addImage({ data: pepperLogoBase64, x: 12.1, y: 0.59, w: 0.70, h: 0.22 });
   slide.addText(`WEEKLY PERFORMANCE · ${spec.period.toUpperCase()}`, { x: 0.7, y: 2.7, w: 12, h: 0.4, fontSize: 13, bold: true, charSpacing: 1, color: c.brand, fontFace: f.body });
   slide.addText("A strong week for organic — and a clear focus for next week.", { x: 0.7, y: 3.2, w: 9, h: 1.4, fontSize: 32, bold: true, color: c.text, fontFace: f.heading, lineSpacingMultiple: 1.05 });
   slide.addText("01", NUM("01"));
@@ -50,7 +58,7 @@ function addAiVisibilitySlide(pptx: pptxgen, spec: ReportSpec) {
 function addResultsSlide(pptx: pptxgen, spec: ReportSpec) {
   const slide = pptx.addSlide({ masterName: "LIGHT" });
   slide.addText("RESULTS THIS WEEK", { x: 0.7, y: 0.6, w: 8, h: 0.4, fontSize: 13, bold: true, charSpacing: 1, color: c.brand, fontFace: f.body });
-  slide.addText("Pepper", { x: 10.5, y: 0.6, w: 2.3, h: 0.4, fontSize: 13, bold: true, align: "right", color: c.aiDark, fontFace: f.heading });
+  slide.addImage({ data: pepperLogoBase64, x: 12.1, y: 0.69, w: 0.70, h: 0.22 });
 
   spec.seo.metrics.slice(0, 3).forEach((m, i) => {
     const x = 0.7 + i * 4.0;
@@ -70,7 +78,7 @@ function addResultsSlide(pptx: pptxgen, spec: ReportSpec) {
 function addRecommendationsSlide(pptx: pptxgen, spec: ReportSpec) {
   const slide = pptx.addSlide({ masterName: "LIGHT" });
   slide.addText("YOUR NEXT STEPS FOR NEXT WEEK", { x: 0.7, y: 0.6, w: 8, h: 0.4, fontSize: 13, bold: true, charSpacing: 1, color: c.brand, fontFace: f.body });
-  slide.addText("Pepper", { x: 10.5, y: 0.6, w: 2.3, h: 0.4, fontSize: 13, bold: true, align: "right", color: c.aiDark, fontFace: f.heading });
+  slide.addImage({ data: pepperLogoBase64, x: 12.1, y: 0.69, w: 0.70, h: 0.22 });
 
   spec.recommendations.slice(0, 3).forEach((r, i) => {
     const y = 1.7 + i * 1.55;
@@ -87,7 +95,7 @@ function addRecommendationsSlide(pptx: pptxgen, spec: ReportSpec) {
 function addWhatNextSlide(pptx: pptxgen, spec: ReportSpec) {
   const slide = pptx.addSlide({ masterName: "LIGHT" });
   slide.addText("WHAT'S NEXT & HOW WE CAN HELP", { x: 0.7, y: 0.6, w: 8, h: 0.4, fontSize: 13, bold: true, charSpacing: 1, color: c.brand, fontFace: f.body });
-  slide.addText("Pepper", { x: 10.5, y: 0.6, w: 2.3, h: 0.4, fontSize: 13, bold: true, align: "right", color: c.aiDark, fontFace: f.heading });
+  slide.addImage({ data: pepperLogoBase64, x: 12.1, y: 0.69, w: 0.70, h: 0.22 });
 
   slide.addShape(pptx.ShapeType.roundRect, { x: 0.7, y: 1.5, w: 5.9, h: 4.6, fill: { color: "f5f3fe" }, line: { color: "f5f3fe" }, rectRadius: 0.1 });
   slide.addText("Pepper handles it", { x: 1.0, y: 1.8, w: 5.3, h: 0.35, fontSize: 14, bold: true, color: "4a43d6", fontFace: f.heading });
