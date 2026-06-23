@@ -17,26 +17,45 @@ export async function POST(req: NextRequest) {
   const period: string = body.period ?? "May 25–31, 2026";
   const guidance: string = body.guidance ?? "";
 
+  // One thread per run so the paused graph can be resumed from /api/report/resume.
+  const threadId = crypto.randomUUID();
+  const config = { configurable: { thread_id: threadId }, recursionLimit: 10, streamMode: "values" as const };
+
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Stream the graph node-by-node (real-time) rather than invoking the whole
-        // graph and dumping events at the end. streamMode "values" yields the full
-        // accumulated state after each super-step; we flush only the newly-added
-        // progress events so the client sees each agent's work as it happens.
+        // Phase 1: run the Collector, then pause at the focusGate interrupt() for the
+        // human-in-the-loop decision. streamMode "values" yields full accumulated state
+        // after each super-step; we flush only newly-added progress events so the
+        // client sees the Collector's work live before the decision appears.
         let emitted = 0;
-        let finalSpec: ProgressEvent["reportSpec"];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let interruptPayload: any = null;
         const iter = await reportGraph.stream(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           { clientName, period, guidance } as any,
-          { recursionLimit: 10, streamMode: "values" }
+          config
         );
-        for await (const state of iter as AsyncIterable<{ progressEvents?: ProgressEvent[]; reportSpec?: ProgressEvent["reportSpec"] }>) {
-          const evs = state.progressEvents ?? [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for await (const state of iter as AsyncIterable<any>) {
+          const evs: ProgressEvent[] = state.progressEvents ?? [];
           for (; emitted < evs.length; emitted++) controller.enqueue(sse(evs[emitted]));
-          if (state.reportSpec) finalSpec = state.reportSpec;
+          const intr = state.__interrupt__;
+          if (Array.isArray(intr) && intr.length) interruptPayload = intr[0]?.value ?? null;
         }
-        controller.enqueue(sse({ type: "done", reportSpec: finalSpec ?? undefined }));
+        // Fallback: read the pending interrupt off the checkpoint if it wasn't in the stream.
+        if (!interruptPayload) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const snap: any = await reportGraph.getState(config);
+          const task = snap?.tasks?.find((t: { interrupts?: { value?: unknown }[] }) => t.interrupts?.length);
+          if (task) interruptPayload = task.interrupts[0]?.value ?? null;
+        }
+        if (interruptPayload) {
+          controller.enqueue(sse({ type: "human_in_loop", threadId, seenCount: emitted, ...interruptPayload }));
+        } else {
+          // No interrupt fired (unexpected) — close cleanly so the client doesn't hang.
+          controller.enqueue(sse({ type: "done" }));
+        }
       } catch (err) {
         controller.enqueue(sse({ type: "error", message: err instanceof Error ? err.message : String(err) }));
       } finally {

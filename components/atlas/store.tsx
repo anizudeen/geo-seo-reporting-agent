@@ -2,14 +2,14 @@
 
 import React, { createContext, useContext, useReducer, useRef, useEffect, useCallback } from "react";
 import {
-  initialBrands, initialReports, runEvents, defaultFindings, subOrder, revOrder,
+  initialBrands, initialReports, defaultFindings, subOrder, revOrder,
   type Brand, type ReportRow, type RunEvent,
 } from "@/lib/atlas/data";
 import type { ReportSpec } from "@/lib/agent/reportSpec";
 import { goldenReportSpec } from "@/lib/atlas/goldenSpec";
 
-/** Backend ProgressEvent → run-feed item. Collector is suppressed (shown in the scripted
- *  intro already); analyst/reviewer steps stream live into the feed. */
+/** Backend ProgressEvent → run-feed item. Collector, analyst and reviewer steps all
+ *  stream live into the feed; the human_in_loop pause is handled by the caller. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapBackendEvent(e: any): RunEvent | null {
   const a: string = e.agent || "";
@@ -22,19 +22,19 @@ function mapBackendEvent(e: any): RunEvent | null {
   return null;
 }
 
-/** Consume the /api/report SSE stream → real Gemini-generated ReportSpec, calling onEvent
- *  for each progress event as it streams. Throws if no key / error. */
-async function fetchRealReport(
-  payload: { clientName: string; period: string; guidance: string },
+/** POST an SSE endpoint and invoke onEvent for every `data:` event as it streams.
+ *  Resolves when the server closes the stream. Throws on a non-OK response. */
+async function streamSSE(
+  url: string,
+  payload: unknown,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onEvent?: (e: any) => void
-): Promise<ReportSpec | null> {
-  const res = await fetch("/api/report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-  if (!res.ok || !res.body) throw new Error(`report failed ${res.status}`);
+  onEvent: (e: any) => void
+): Promise<void> {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  if (!res.ok || !res.body) throw new Error(`${url} failed ${res.status}`);
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "";
-  let spec: ReportSpec | null = null;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -44,13 +44,9 @@ async function fetchRealReport(
     for (const p of parts) {
       const line = p.trim();
       if (!line.startsWith("data:")) continue;
-      const obj = JSON.parse(line.slice(5).trim());
-      if (obj.type === "done") spec = obj.reportSpec ?? null;
-      else if (obj.type === "error") throw new Error(obj.message || "agent error");
-      else onEvent?.(obj);
+      onEvent(JSON.parse(line.slice(5).trim()));
     }
   }
-  return spec;
 }
 
 type Screen = "brands" | "dashboard" | "generate" | "review" | "deliver" | "client" | "reports";
@@ -194,6 +190,8 @@ export function AtlasProvider({ children }: { children: React.ReactNode }) {
   const feedRef = useRef<HTMLDivElement>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const typeT = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The paused-graph handle from the backend interrupt, used to resume the run.
+  const interruptCtx = useRef<{ threadId: string; seenCount: number } | null>(null);
 
   const set = useCallback((p: Patch) => dispatch(p), []);
 
@@ -238,29 +236,57 @@ export function AtlasProvider({ children }: { children: React.ReactNode }) {
     set({ running: false, runDone: true, activeAgent: null });
   }, [set]);
 
-  // The run opens with the one human-in-the-loop decision (which growth opportunity to build
-  // the case for); the real agents run after the choice. No scripted timeline.
-  const startRun = useCallback(() => {
+  // Start the REAL agent pipeline immediately: the Data Collector runs and locks the
+  // numbers first, then the graph pauses at the backend interrupt() and the
+  // human-in-the-loop decision card is rendered from the streamed payload.
+  const startRun = useCallback(async () => {
     clearTimers();
-    const intr = runEvents.find((e) => e.type === "interrupt");
-    set({ runStarted: true, running: true, runDone: false, awaitingInput: true, focusChoice: null, awaitingCustom: false, customFocusText: "", feed: [], reviewerFindings: [], srcDone: {}, activeAgent: null, reportSpec: null, usedLiveAI: false, runStartedAt: Date.now() });
-    if (intr) appendFeed({ ...intr, agent: "insight" });
+    interruptCtx.current = null;
+    const s = stateRef.current;
+    const baseGuidance = s.agentInstr.insight || "";
+    set({ runStarted: true, running: true, runDone: false, awaitingInput: false, focusChoice: null, awaitingCustom: false, customFocusText: "", feed: [], reviewerFindings: [], srcDone: {}, activeAgent: "data", reportSpec: null, usedLiveAI: false, runStartedAt: Date.now() });
+    try {
+      await streamSSE(
+        "/api/report",
+        { clientName: s.selectedBrand, period: "May 25–31, 2026", guidance: baseGuidance },
+        (e) => {
+          if (e.type === "human_in_loop") {
+            interruptCtx.current = { threadId: e.threadId, seenCount: e.seenCount || 0 };
+            set({ awaitingInput: true, activeAgent: "insight" });
+            appendFeed({ agent: "insight", type: "interrupt", question: e.question, hint: e.hint, options: e.options });
+            return;
+          }
+          if (e.type === "error") throw new Error(e.message || "agent error");
+          if (e.type === "done") return;
+          const item = mapBackendEvent(e);
+          if (!item) return;
+          set({ activeAgent: item.agent });
+          appendFeed(item);
+        }
+      );
+    } catch (err) {
+      appendFeed({ agent: "fact", type: "finding", sev: "warn", text: "Agent run could not complete — " + (err instanceof Error ? err.message : String(err)) + ". Check the Gemini API key / quota and run again." });
+      set({ running: false, activeAgent: null });
+    }
   }, [clearTimers, set, appendFeed]);
 
-  // After the focus is chosen, run the REAL agent pipeline (/api/report) and stream every
-  // agent's work (Data Collector → Insights Writer → Fact-Checker) into the feed live.
-  // No scripted fallback — on failure we surface the real error.
-  const continueAfterFocus = useCallback(async (opt: { key: string; label: string; pitch: string }, resumeText: string) => {
-    set({ awaitingInput: false, focusChoice: opt, awaitingCustom: false, customFocusText: "" });
-    appendFeed({ agent: "insight", type: "result", text: resumeText });
-    const s = stateRef.current;
-    const guidance = `Report focus: ${opt.label} — ${opt.pitch}. ${s.agentInstr.insight || ""}`.trim();
-    set({ activeAgent: "data" });
+  // After the focus is chosen, RESUME the paused graph (/api/report/resume) and stream
+  // the Insights Writer + Fact-Checker work into the feed live. No scripted fallback —
+  // on failure we surface the real error.
+  const resumeReport = useCallback(async (choice: { key: string; label: string; pitch: string } | string, label: string) => {
+    const ctx = interruptCtx.current;
+    if (!ctx) return;
+    const chosen = typeof choice === "string" ? { key: "other", label, pitch: "" } : choice;
+    set({ awaitingInput: false, focusChoice: chosen, awaitingCustom: false, customFocusText: "", activeAgent: "insight" });
     scrollFeed();
     try {
-      const spec = await fetchRealReport(
-        { clientName: s.selectedBrand, period: "May 25–31, 2026", guidance },
+      let spec: ReportSpec | null = null;
+      await streamSSE(
+        "/api/report/resume",
+        { threadId: ctx.threadId, choice, seenCount: ctx.seenCount },
         (e) => {
+          if (e.type === "done") { spec = e.reportSpec ?? null; return; }
+          if (e.type === "error") throw new Error(e.message || "agent error");
           const item = mapBackendEvent(e);
           if (!item) return;
           if (item.type === "finding") set((st) => ({ reviewerFindings: [...st.reviewerFindings, item] }));
@@ -272,7 +298,7 @@ export function AtlasProvider({ children }: { children: React.ReactNode }) {
       set({ reportSpec: spec, usedLiveAI: true, activeAgent: "insight" });
       // Stream the real executive summary as the drafted narrative.
       appendFeed({ agent: "insight", type: "stream", text: "" });
-      typeStream(spec.execSummary.text, () => finishRun());
+      typeStream((spec as ReportSpec).execSummary.text, () => finishRun());
     } catch (err) {
       appendFeed({ agent: "fact", type: "finding", sev: "warn", text: "Agent run could not complete — " + (err instanceof Error ? err.message : String(err)) + ". Check the Gemini API key / quota and run again." });
       set({ running: false, activeAgent: null });
@@ -282,14 +308,14 @@ export function AtlasProvider({ children }: { children: React.ReactNode }) {
   const chooseFocus = useCallback((opt: { key: string; label: string; pitch: string; isOther?: boolean }) => {
     if (!stateRef.current.awaitingInput) return;
     if (opt.key === "other") { set({ awaitingCustom: true }); return; }
-    continueAfterFocus(opt, `Focus set — “${opt.label}.” Prioritizing the narrative and recommendations to ${opt.pitch.toLowerCase()}.`);
-  }, [set, continueAfterFocus]);
+    resumeReport({ key: opt.key, label: opt.label, pitch: opt.pitch }, opt.label);
+  }, [set, resumeReport]);
 
   const submitCustomFocus = useCallback(() => {
     const v = (stateRef.current.customFocusText || "").trim();
     if (!v) return;
-    continueAfterFocus({ key: "other", label: v, pitch: v }, `Focus set — “${v}.” Agents will prioritise based on your instruction.`);
-  }, [continueAfterFocus]);
+    resumeReport(v, v);
+  }, [resumeReport]);
 
   // ---------- navigation ----------
   const openBrand = useCallback((name: string, interim?: boolean) => {

@@ -1,4 +1,4 @@
-import { StateGraph, Annotation, messagesStateReducer } from "@langchain/langgraph";
+import { StateGraph, Annotation, messagesStateReducer, interrupt, MemorySaver } from "@langchain/langgraph";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
 import { getModel, getDeepSeekModel, isQuotaError } from "./model";
@@ -16,7 +16,9 @@ export interface ProgressEvent {
   severity?: "info" | "warn" | "error";
   question?: string;
   hint?: string;
-  options?: { label: string; pitch: string }[];
+  options?: { key?: string; label: string; pitch: string; isOther?: boolean }[];
+  threadId?: string;   // for human_in_loop: the checkpointer thread to resume
+  seenCount?: number;  // for human_in_loop: progressEvents already streamed before the pause
   reportSpec?: ReportSpec;
 }
 
@@ -162,6 +164,45 @@ async function collectorNode(state: State): Promise<Partial<State>> {
   };
 }
 
+// The one human-in-the-loop decision, surfaced AFTER the Collector has locked the
+// numbers and BEFORE the Analyst drafts. Real LangGraph interrupt() — the graph
+// pauses here (checkpointed) and resumes when the client sends Command({ resume }).
+const FOCUS_INTERRUPT = {
+  question: "Before Insights Writer drafts — which growth opportunity should this report build the case for?",
+  hint: "Your pick steers the narrative and the expansion pitch to the client. Numbers stay the same either way.",
+  options: [
+    { key: "geo", label: "AI-search visibility", pitch: "Build the case for a GEO retainer" },
+    { key: "content", label: "Content refresh", pitch: "Build the case for an editorial program" },
+    { key: "competitive", label: "Competitive displacement", pitch: "Build the case for an “Acme vs Quanta” campaign" },
+    { key: "other", label: "Other — type your own", pitch: "", isOther: true },
+  ],
+};
+
+type FocusChoice = { key?: string; label?: string; pitch?: string } | string;
+
+async function focusGateNode(state: State): Promise<Partial<State>> {
+  // First pass: interrupt() throws GraphInterrupt and the graph pauses here (the
+  // collector's events have already streamed). On resume the SAME node re-runs and
+  // interrupt() returns the resumed value, so keep everything below it idempotent.
+  const choice = interrupt(FOCUS_INTERRUPT) as FocusChoice;
+
+  const label = typeof choice === "string" ? choice : (choice?.label || "the chosen focus");
+  const pitch = typeof choice === "string" ? "" : (choice?.pitch || "");
+  const focusText = `Report focus: ${label}${pitch ? ` — ${pitch}` : ""}.`;
+  // Combine the chosen focus with the base guidance the run was started with.
+  const guidance = [focusText, state.guidance].filter(Boolean).join(" ");
+
+  return {
+    guidance,
+    progressEvents: [...state.progressEvents, {
+      type: "progress",
+      agent: "Agent 2 — Analyst",
+      message: `Focus set — “${label}.” Prioritising the narrative and recommendations accordingly.`,
+      severity: "info",
+    }],
+  };
+}
+
 async function analystNode(state: State): Promise<Partial<State>> {
   const events: ProgressEvent[] = [
     { type: "progress", agent: "Agent 2 — Analyst", message: "Interpreting data and drafting report narrative…" },
@@ -279,20 +320,27 @@ async function reviewerNode(state: State): Promise<Partial<State>> {
   };
 }
 
+// In-process checkpointer — required for interrupt()/resume. Persists paused graph
+// state keyed by thread_id for the life of the Node process (fine for local dev;
+// swap for a Postgres/SQLite saver in a multi-instance deployment).
+const checkpointer = new MemorySaver();
+
 function buildGraph() {
   const graph = new StateGraph(StateAnnotation)
     .addNode("collector", collectorNode)
+    .addNode("focusGate", focusGateNode)
     .addNode("analyst", analystNode)
     .addNode("reviewer", reviewerNode)
     .addEdge("__start__", "collector")
-    .addEdge("collector", "analyst")
+    .addEdge("collector", "focusGate")
+    .addEdge("focusGate", "analyst")
     .addEdge("analyst", "reviewer")
     .addConditionalEdges("reviewer", (state) => state.needsRevision ? "analyst" : "__end__", {
       analyst: "analyst",
       __end__: "__end__",
     });
 
-  return graph.compile();
+  return graph.compile({ checkpointer });
 }
 
 export const reportGraph = buildGraph();
