@@ -65,7 +65,6 @@ export function visColor(vis: number) {
 
 // ---------- agent roster + run event script ----------
 export const agentMeta: Record<string, { name: string; type: string; color: string }> = {
-  orch: { name: "Orchestrator", type: "AI", color: "#5b54f5" },
   data: { name: "Data Collector", type: "Deterministic", color: "#1f5fd0" },
   metrics: { name: "Metrics Engine", type: "Deterministic", color: "#1f5fd0" },
   detect: { name: "Anomaly & Wins", type: "Deterministic", color: "#1f5fd0" },

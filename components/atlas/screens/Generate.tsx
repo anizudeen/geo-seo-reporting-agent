@@ -211,7 +211,7 @@ function Setup() {
 function RunConsole() {
   const a = useAtlas();
   const seen = new Set(a.feed.map((f) => f.agent));
-  const rosterAgents = ["orch", ...subOrder.filter((k) => a.agentsOn[k] !== false)];
+  const rosterAgents = [...subOrder.filter((k) => a.agentsOn[k] !== false)];
   const rosterReviewers = revOrder.filter((k) => a.reviewersOn[k] !== false);
   const activeName = a.activeAgent ? agentMeta[a.activeAgent]?.name : a.runDone ? "Complete" : "";
 

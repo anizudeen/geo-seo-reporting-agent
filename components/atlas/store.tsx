@@ -13,10 +13,9 @@ import { goldenReportSpec } from "@/lib/atlas/goldenSpec";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapBackendEvent(e: any): RunEvent | null {
   const a: string = e.agent || "";
-  if (e.type === "human_in_loop") return null;
-  if (/Collector/i.test(a)) return null;
-  const agentId = /Analyst|Insight/i.test(a) ? "insight" : /Reviewer|Fact/i.test(a) ? "fact" : "orch";
-  if (e.callLine) return { agent: agentId, type: "result", text: e.callLine };
+  const agentId = /Collector/i.test(a) ? "data" : /Analyst|Insight/i.test(a) ? "insight" : /Reviewer|Fact/i.test(a) ? "fact" : "data";
+  if (e.type === "human_in_loop") return { agent: "fact", type: "finding", sev: "warn", text: e.hint || e.question || "Flagged for human verification." };
+  if (e.callLine) return { agent: agentId, type: "msg", text: String(e.callLine).replace(/^collector → /, "") };
   if (e.severity === "warn") return { agent: agentId, type: "finding", sev: "warn", text: e.message };
   if (e.severity === "info") return { agent: agentId, type: "finding", sev: "pass", text: e.message };
   if (e.message) return { agent: agentId, type: "msg", text: e.message };
@@ -195,8 +194,6 @@ export function AtlasProvider({ children }: { children: React.ReactNode }) {
   const feedRef = useRef<HTMLDivElement>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const typeT = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const events = useRef<RunEvent[]>([]);
-  const evIdx = useRef(0);
 
   const set = useCallback((p: Patch) => dispatch(p), []);
 
@@ -223,18 +220,6 @@ export function AtlasProvider({ children }: { children: React.ReactNode }) {
     scrollFeed();
   }, [set, scrollFeed]);
 
-  const buildEvents = useCallback((): RunEvent[] => {
-    const s = stateRef.current;
-    return runEvents
-      .filter((e) => {
-        if (e.src && !s.sources[e.src]) return false;
-        if (["metrics", "detect", "insight", "aisearch", "recs"].includes(e.agent) && s.agentsOn[e.agent] === false) return false;
-        if (["fact", "tone", "brand"].includes(e.agent) && s.reviewersOn[e.agent] === false) return false;
-        return true;
-      })
-      .map((e) => ({ ...e })); // clone so we can inject real LLM text without mutating the source
-  }, []);
-
   const typeStream = useCallback((full: string, done: () => void) => {
     const step = Math.max(2, Math.round(full.length / 46));
     let i = 0;
@@ -253,62 +238,46 @@ export function AtlasProvider({ children }: { children: React.ReactNode }) {
     set({ running: false, runDone: true, activeAgent: null });
   }, [set]);
 
-  const playNext = useCallback(() => {
-    if (!stateRef.current.running) return;
-    if (evIdx.current >= events.current.length) { finishRun(); return; }
-    const e = events.current[evIdx.current++];
-    set({ activeAgent: e.agent });
-    if (e.src) set((s) => ({ srcDone: { ...s.srcDone, [e.src as string]: true } }));
-    if (e.type === "interrupt") { set({ awaitingInput: true, activeAgent: "orch" }); appendFeed(e); return; }
-    if (e.type === "finding") set((s) => ({ reviewerFindings: [...s.reviewerFindings, e] }));
-    if (e.type === "stream") {
-      appendFeed({ ...e, text: "" });
-      typeStream(e.text || "", () => later(() => playNext(), 300));
-    } else {
-      appendFeed(e);
-      const d = e.type === "tool" ? 560 : (e.type === "handoff" || e.type === "plan") ? 760 : e.type === "finding" ? 660 : e.type === "complete" ? 200 : 470;
-      later(() => playNext(), d);
-    }
-  }, [set, appendFeed, typeStream, later, finishRun]);
-
+  // The run opens with the one human-in-the-loop decision (which growth opportunity to build
+  // the case for); the real agents run after the choice. No scripted timeline.
   const startRun = useCallback(() => {
     clearTimers();
-    set({ runStarted: true, running: true, runDone: false, awaitingInput: false, focusChoice: null, feed: [], reviewerFindings: [], srcDone: {}, activeAgent: "orch", reportSpec: null, usedLiveAI: false, runStartedAt: Date.now() });
-    events.current = buildEvents();
-    evIdx.current = 0;
-    later(() => playNext(), 380);
-  }, [clearTimers, set, buildEvents, later, playNext]);
+    const intr = runEvents.find((e) => e.type === "interrupt");
+    set({ runStarted: true, running: true, runDone: false, awaitingInput: true, focusChoice: null, awaitingCustom: false, customFocusText: "", feed: [], reviewerFindings: [], srcDone: {}, activeAgent: "insight", reportSpec: null, usedLiveAI: false, runStartedAt: Date.now() });
+    if (intr) appendFeed({ ...intr, agent: "insight" });
+  }, [clearTimers, set, appendFeed]);
 
-  // After the focus is chosen, try the REAL Gemini pipeline (/api/report). If it returns a
-  // generated ReportSpec, inject its narrative into the streamed feed + store it for review/deck.
-  // On any failure (no API key, etc.) fall back to the scripted narrative + golden spec.
+  // After the focus is chosen, run the REAL agent pipeline (/api/report) and stream every
+  // agent's work (Data Collector → Insights Writer → Fact-Checker) into the feed live.
+  // No scripted fallback — on failure we surface the real error.
   const continueAfterFocus = useCallback(async (opt: { key: string; label: string; pitch: string }, resumeText: string) => {
     set({ awaitingInput: false, focusChoice: opt, awaitingCustom: false, customFocusText: "" });
-    appendFeed({ agent: "orch", type: "resume", text: resumeText });
+    appendFeed({ agent: "insight", type: "result", text: resumeText });
     const s = stateRef.current;
     const guidance = `Report focus: ${opt.label} — ${opt.pitch}. ${s.agentInstr.insight || ""}`.trim();
-    appendFeed({ agent: "insight", type: "msg", text: "Insights Writer is drafting the report with Gemini…" });
-    set({ activeAgent: "insight" });
+    set({ activeAgent: "data" });
     scrollFeed();
     try {
-      // Stream the real agents (analyst → reviewer) live into the feed as they execute.
       const spec = await fetchRealReport(
         { clientName: s.selectedBrand, period: "May 25–31, 2026", guidance },
-        (e) => { const item = mapBackendEvent(e); if (item) { set({ activeAgent: item.agent }); appendFeed(item); } }
+        (e) => {
+          const item = mapBackendEvent(e);
+          if (!item) return;
+          if (item.type === "finding") set((st) => ({ reviewerFindings: [...st.reviewerFindings, item] }));
+          set({ activeAgent: item.agent });
+          appendFeed(item);
+        }
       );
-      if (!spec) throw new Error("no spec");
+      if (!spec) throw new Error("no report returned");
       set({ reportSpec: spec, usedLiveAI: true, activeAgent: "insight" });
       // Stream the real executive summary as the drafted narrative.
       appendFeed({ agent: "insight", type: "stream", text: "" });
-      typeStream(spec.execSummary.text, () => {
-        appendFeed({ agent: "orch", type: "complete", text: "Run complete — draft and review ready for your approval." });
-        finishRun();
-      });
-    } catch {
-      // no key / error → fall back to the scripted narrative + golden spec
-      later(() => playNext(), 400);
+      typeStream(spec.execSummary.text, () => finishRun());
+    } catch (err) {
+      appendFeed({ agent: "fact", type: "finding", sev: "warn", text: "Agent run could not complete — " + (err instanceof Error ? err.message : String(err)) + ". Check the Gemini API key / quota and run again." });
+      set({ running: false, activeAgent: null });
     }
-  }, [set, appendFeed, scrollFeed, typeStream, finishRun, later, playNext]);
+  }, [set, appendFeed, scrollFeed, typeStream, finishRun]);
 
   const chooseFocus = useCallback((opt: { key: string; label: string; pitch: string; isOther?: boolean }) => {
     if (!stateRef.current.awaitingInput) return;
