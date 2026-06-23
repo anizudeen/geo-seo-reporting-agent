@@ -4,6 +4,7 @@ import { useAtlas } from "../store";
 import { Box } from "../ui";
 import { DeckSlide } from "../DeckSlide";
 import { exportDeck } from "@/lib/atlas/export";
+import { goldenReportSpec } from "@/lib/atlas/goldenSpec";
 
 export function ClientScreen() {
   const a = useAtlas();
@@ -32,7 +33,7 @@ export function ClientScreen() {
       </div>
 
       <div style={{ maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
-        {[0, 1, 2, 3, 4].map((i) => <DeckSlide key={i} index={i} />)}
+        {[0, 1, 2, 3, 4].map((i) => <DeckSlide key={i} index={i} spec={a.reportSpec ?? goldenReportSpec} />)}
         <div style={{ textAlign: "center", fontSize: 12, color: "#86868f", padding: "6px 0 4px" }}>+ 7 more slides · full data appendix · prepared by Pepper</div>
       </div>
     </section>

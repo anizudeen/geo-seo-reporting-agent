@@ -6,6 +6,7 @@ import {
   type Brand, type ReportRow, type RunEvent,
 } from "@/lib/atlas/data";
 import type { ReportSpec } from "@/lib/agent/reportSpec";
+import { goldenReportSpec } from "@/lib/atlas/goldenSpec";
 
 /** Consume the /api/report SSE stream → real Gemini-generated ReportSpec. Throws if no key / error. */
 async function fetchRealReport(payload: { clientName: string; period: string; guidance: string }): Promise<ReportSpec | null> {
@@ -111,6 +112,7 @@ function reducer(state: AtlasState, patch: Patch): AtlasState {
 
 interface AtlasActions {
   set: (p: Patch) => void;
+  updateReportSpec: (mutate: (s: ReportSpec) => void) => void;
   toggleSidebar: () => void;
   goBrands: () => void;
   goReports: () => void;
@@ -333,6 +335,13 @@ export function AtlasProvider({ children }: { children: React.ReactNode }) {
 
   const actions: AtlasActions = {
     set, feedRef,
+    // Edit the report spec in place (initialize from golden if a live spec isn't present),
+    // so manual edits flow into both the deck preview and the exported .pptx.
+    updateReportSpec: (mutate) => set((s) => {
+      const base: ReportSpec = structuredClone(s.reportSpec ?? goldenReportSpec);
+      mutate(base);
+      return { reportSpec: base };
+    }),
     toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
     goBrands: () => { clearTimers(); set({ screen: "brands", playing: false, delivered: false, interim: false, runStarted: false, running: false }); },
     goReports: () => { clearTimers(); set({ screen: "reports", playing: false }); },

@@ -122,7 +122,7 @@ function EditMode() {
 
       <div id="edit-exec" style={{ marginBottom: 14 }}>
         <SectionLabel n="01" title="Executive summary" />
-        <AiBlock block={execLive} showSources={ss} showConfidence={sc} />
+        <AiBlock block={execLive} showSources={ss} showConfidence={sc} onCommit={(t) => a.updateReportSpec((s) => { s.execSummary.text = t; })} />
       </div>
 
       <div style={{ margin: "26px 0 14px" }}>
@@ -234,13 +234,13 @@ function EditMode() {
           <div style={{ flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: "#cfccf0" }}>▼ 4 vs last week · Acme 14% SoV · Quanta 29% ▲</div><div style={{ fontSize: 12, color: "#9a95c4", marginTop: 2 }}>Low-confidence signal — limited prompt sampling this cycle</div></div>
           <SourceTag source="Semrush AI" confidence="Medium" figure="Semrush AI Visibility Index = 38 / 100 (prior wk: 42)" showSources={ss} showConfidence={sc} />
         </div>
-        <AiBlock block={aiLive} showSources={ss} showConfidence={sc} />
+        <AiBlock block={aiLive} showSources={ss} showConfidence={sc} onCommit={(t) => a.updateReportSpec((s) => { s.aiVisibility.citationOpportunity = t; })} />
       </div>
 
       <div id="edit-recs" style={{ margin: "30px 0 14px" }}>
         <SectionLabel n="04" title="Recommendations" badge={focusLabel} />
         <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-          {recLive.map((rec) => <AiBlock key={rec.label} block={rec} showSources={ss} showConfidence={sc} />)}
+          {recLive.map((rec, i) => <AiBlock key={rec.label} block={rec} showSources={ss} showConfidence={sc} onCommit={(t) => a.updateReportSpec((s) => { if (s.recommendations[i]) s.recommendations[i].brief = t; })} />)}
         </div>
       </div>
 

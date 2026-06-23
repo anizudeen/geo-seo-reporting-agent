@@ -10,7 +10,7 @@ const btnHover = "background:#f5f3fe;border-color:#d8d2f3";
 const menuStyle: React.CSSProperties = { position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 30, display: "flex", flexDirection: "column", background: "#fff", border: "1px solid #e6e3f2", borderRadius: 10, padding: 5, boxShadow: "0 14px 34px rgba(20,18,31,.16)", width: 150 };
 const menuItem = "text-align:left;background:transparent;border:none;cursor:pointer;padding:8px 10px;font-size:12.5px;font-weight:600;color:#3a3654;border-radius:7px;font-family:inherit";
 
-export function AiBlock({ block, showSources = true, showConfidence = false }: { block: AiBlockData; showSources?: boolean; showConfidence?: boolean }) {
+export function AiBlock({ block, showSources = true, showConfidence = false, onCommit }: { block: AiBlockData; showSources?: boolean; showConfidence?: boolean; onCommit?: (text: string) => void }) {
   const editRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState(block.text);
   const [history, setHistory] = useState<string[]>([]);
@@ -32,10 +32,10 @@ export function AiBlock({ block, showSources = true, showConfidence = false }: {
     }
   }, [version, text]);
 
-  const push = (next: string) => { setHistory((h) => [...h, text]); setText(next); setVersion((v) => v + 1); setEdited(true); };
+  const push = (next: string) => { setHistory((h) => [...h, text]); setText(next); setVersion((v) => v + 1); setEdited(true); onCommit?.(next); };
   const applySoon = (next: string) => {
     setRegenerating(true); setToneOpen(false); setLengthOpen(false); setShowRewriteInput(false);
-    setTimeout(() => { setHistory((h) => [...h, text]); setText(next); setVersion((v) => v + 1); setEdited(true); setRegenerating(false); }, 650);
+    setTimeout(() => { setHistory((h) => [...h, text]); setText(next); setVersion((v) => v + 1); setEdited(true); setRegenerating(false); onCommit?.(next); }, 650);
   };
 
   const borderColor = block.lowConfidence ? "#f1d6d7" : "#e8e8ef";
@@ -62,7 +62,7 @@ export function AiBlock({ block, showSources = true, showConfidence = false }: {
         suppressContentEditableWarning
         spellCheck={false}
         onFocus={() => setFocused(true)}
-        onBlur={(e) => { const v = (e.target as HTMLDivElement).innerText; if (v !== text) { setHistory((h) => [...h, text]); setText(v); setEdited(true); } setFocused(false); }}
+        onBlur={(e) => { const v = (e.target as HTMLDivElement).innerText; if (v !== text) { setHistory((h) => [...h, text]); setText(v); setEdited(true); onCommit?.(v); } setFocused(false); }}
         style={{ fontSize: 14.5, lineHeight: 1.62, color: "#2c2940", outline: "none", borderRadius: 10, padding: "6px 8px", margin: "0 -8px", transition: "background .15s,box-shadow .15s", minHeight: 24, ...(focused ? { background: "#fbfbfc", boxShadow: "inset 0 0 0 1.5px #cfc8f7" } : {}) }}
       />
 
@@ -117,7 +117,7 @@ export function AiBlock({ block, showSources = true, showConfidence = false }: {
         </span>
 
         {history.length > 0 && (
-          <Box as="button" s="display:inline-flex;align-items:center;gap:5px;background:#fdf8ef;color:#b5781f;border:1px solid #eddcc0;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit" h={btnHover} onClick={() => { setHistory((h) => { if (!h.length) return h; const nh = h.slice(); const prev = nh.pop()!; setText(prev); setVersion((v) => v + 1); setEdited(nh.length > 0); return nh; }); }}>
+          <Box as="button" s="display:inline-flex;align-items:center;gap:5px;background:#fdf8ef;color:#b5781f;border:1px solid #eddcc0;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit" h={btnHover} onClick={() => { setHistory((h) => { if (!h.length) return h; const nh = h.slice(); const prev = nh.pop()!; setText(prev); setVersion((v) => v + 1); setEdited(nh.length > 0); onCommit?.(prev); return nh; }); }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8h11a6 6 0 0 1 0 12h-3M3 8l4-4M3 8l4 4" /></svg> Undo
           </Box>
         )}
