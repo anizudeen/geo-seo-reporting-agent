@@ -25,3 +25,21 @@ export function getModel(temperature = 0): BaseChatModel {
       });
   }
 }
+
+// DeepSeek — OpenAI-compatible API, used as automatic fallback when Gemini hits quota.
+// Requires DEEPSEEK_API_KEY in env. Get a key at platform.deepseek.com.
+// Override model with DEEPSEEK_MODEL env var.
+export function getDeepSeekModel(temperature = 0): BaseChatModel {
+  return new ChatOpenAI({
+    model: process.env.DEEPSEEK_MODEL ?? "deepseek-v4-flash",
+    temperature,
+    apiKey: process.env.DEEPSEEK_API_KEY,
+    configuration: { baseURL: "https://api.deepseek.com" },
+  });
+}
+
+// Returns true for Gemini 429 / quota exhaustion errors.
+export function isQuotaError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("429") || /quota/i.test(msg) || /rate.?limit/i.test(msg);
+}

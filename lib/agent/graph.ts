@@ -1,7 +1,7 @@
 import { StateGraph, Annotation, messagesStateReducer } from "@langchain/langgraph";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
-import { getModel } from "./model";
+import { getModel, getDeepSeekModel, isQuotaError } from "./model";
 import { agentTools, getGscData, getGa4Data, getSemrushData, getAiVisibilityData, getCmsData } from "./tools";
 import { ReportSpecSchema } from "./reportSpec";
 import type { ReportSpec } from "./reportSpec";
@@ -81,6 +81,36 @@ Respond with:
 Draft ReportSpec:
 {{spec}}`;
 
+// Exact JSON template shown to DeepSeek (thinking model — structured output unsupported).
+const REPORT_SPEC_TEMPLATE = JSON.stringify({
+  clientName: "string",
+  period: "string",
+  execSummary: { text: "string", winOfWeek: "string", watch: "string" },
+  seo: {
+    metrics: [{ label: "string", value: "string", delta: "string" }],
+    keywordMovers: [{ kw: "string", pos: 0, change: 0, vol: 0 }],
+    topPages: [{ path: "string", clicks: 0, stale: false, note: "string" }],
+    competitorBenchmark: [{ label: "string", acme: "string", competitor: "string" }],
+    conversionNote: "string",
+    attributionNote: "string",
+  },
+  aiVisibility: {
+    score: 0, delta: 0,
+    sov: [{ brand: "string", pct: 0 }],
+    engineBreakdown: [{ name: "string", score: 0, change: 0 }],
+    mentions: [{ platform: "string", prompt: "string", competitors: ["string"] }],
+    citationOpportunity: "string",
+    lowConfidence: false,
+  },
+  recommendations: [{ num: 1, label: "string", brief: "string" }],
+  whatNext: {
+    pepperHandles: ["string"],
+    selfService: ["string"],
+    services: [{ title: "string", tagline: "string", desc: "string" }],
+  },
+  slides: [{ slideNum: 1, label: "string" }],
+}, null, 2);
+
 async function collectorNode(state: State): Promise<Partial<State>> {
   const events: ProgressEvent[] = [];
   const collected: Record<string, unknown> = {};
@@ -135,7 +165,24 @@ async function analystNode(state: State): Promise<Partial<State>> {
     callLine: "analyst → synthesize_report(gsc, ga4, semrush, ai_visibility, cms) ▶ drafting…",
   });
 
-  const spec = await structuredModel.invoke([new HumanMessage(prompt)]);
+  let spec: ReportSpec;
+  try {
+    spec = await structuredModel.invoke([new HumanMessage(prompt)]) as ReportSpec;
+  } catch (err) {
+    if (isQuotaError(err) && process.env.DEEPSEEK_API_KEY) {
+      events.push({ type: "progress", agent: "Agent 2 — Analyst", message: "Gemini quota reached — switching to DeepSeek fallback…", severity: "warn" });
+      // DeepSeek V4 Flash is a thinking model — json_schema and tool_choice are both blocked.
+      // Embed the exact schema in the prompt and parse the JSON response directly.
+      const schemaHint = `\n\nYou MUST respond with a single JSON object matching EXACTLY this structure (use these exact field names, no extras):\n${REPORT_SPEC_TEMPLATE}`;
+      const result = await getDeepSeekModel(0).invoke([new HumanMessage(prompt + schemaHint)]);
+      const text = typeof result.content === "string" ? result.content : JSON.stringify(result.content);
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("DeepSeek did not return valid JSON");
+      spec = ReportSpecSchema.parse(JSON.parse(jsonMatch[0]));
+    } else {
+      throw err;
+    }
+  }
 
   events.push({
     type: "progress",
@@ -145,7 +192,7 @@ async function analystNode(state: State): Promise<Partial<State>> {
   });
 
   return {
-    reportSpec: spec as ReportSpec,
+    reportSpec: spec,
     progressEvents: [...state.progressEvents, ...events],
     messages: [...state.messages, new AIMessage("Draft report generated.")],
   };
@@ -160,11 +207,21 @@ async function reviewerNode(state: State): Promise<Partial<State>> {
     return { progressEvents: [...state.progressEvents, ...events] };
   }
 
-  const model = getModel(0);
   const prompt = REVIEWER_PROMPT.replace("{{spec}}", JSON.stringify(state.reportSpec, null, 2));
 
-  const result = await model.invoke([new HumanMessage(prompt)]);
-  const reviewText = typeof result.content === "string" ? result.content : String(result.content);
+  let reviewText: string;
+  try {
+    const result = await getModel(0).invoke([new HumanMessage(prompt)]);
+    reviewText = typeof result.content === "string" ? result.content : String(result.content);
+  } catch (err) {
+    if (isQuotaError(err) && process.env.DEEPSEEK_API_KEY) {
+      events.push({ type: "progress", agent: "Agent 3 — Reviewer", message: "Gemini quota reached — switching to DeepSeek fallback…", severity: "warn" });
+      const result = await getDeepSeekModel(0).invoke([new HumanMessage(prompt)]);
+      reviewText = typeof result.content === "string" ? result.content : String(result.content);
+    } else {
+      throw err;
+    }
+  }
 
   if (reviewText.startsWith("APPROVED")) {
     events.push({
